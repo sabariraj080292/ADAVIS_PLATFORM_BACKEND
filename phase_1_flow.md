@@ -251,3 +251,36 @@ Use this document as the operational reference for implementation, endpoint sequ
 
 
 
+
+
+User1 -  Deactivate: 
+
+Group 1
+Role 1 - Group 1
+
+
+IIOT
+
+	assets
+
+	asset_tag
+		tempareture
+		pressure
+
+	asset_tag_threshold
+		Alarm
+		Min
+		Max
+		Ideal
+
+Configuration
+	Make 
+
+	
+plantId: 'PLNT-1783095376013',
+blockId: 'BLK-1783095376013',
+areaId: 'AREA-1783095376013',
+roomId: 'ROOM-1783095376013',
+
+	
+
