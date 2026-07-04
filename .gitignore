@@ -29,7 +29,6 @@ logs/
 .env.*.local
 
 # Docker
-**/Dockerfile
 **/.dockerignore
 
 # Kubernetes secrets

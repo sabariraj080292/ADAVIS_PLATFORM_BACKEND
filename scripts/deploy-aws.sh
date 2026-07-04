@@ -28,6 +28,23 @@ if [ ! -f "$ENV_FILE" ]; then
   exit 1
 fi
 
+required_dockerfiles=(
+  "$REPO_ROOT/services/api-gateway/Dockerfile"
+  "$REPO_ROOT/services/auth-service/Dockerfile"
+  "$REPO_ROOT/services/mdm-service/Dockerfile"
+  "$REPO_ROOT/services/iiot-service/Dockerfile"
+  "$REPO_ROOT/services/license-service/Dockerfile"
+  "$REPO_ROOT/services/audit-service/Dockerfile"
+)
+
+for dockerfile in "${required_dockerfiles[@]}"; do
+  if [ ! -f "$dockerfile" ]; then
+    echo "Missing Dockerfile: $dockerfile" >&2
+    echo "Ensure Dockerfiles are committed to git and available on this host." >&2
+    exit 1
+  fi
+done
+
 required_keys=(
   JWT_SECRET
   MONGODB_URI
