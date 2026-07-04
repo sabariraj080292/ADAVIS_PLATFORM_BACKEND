@@ -1,0 +1,130 @@
+# Compiled files
+**/target/
+**/classes/
+**/dependency-reduced-pom.xml
+
+# IDE files
+.idea/
+*.iml
+*.iws
+*.ipr
+.classpath
+.project
+.settings/
+.vscode/
+.mvn/
+
+# Log files
+*.log
+logs/
+**/logs/
+
+# Environment files
+.env
+.env.local
+.env.dev
+.env.staging
+.env.prod
+.env.aws
+.env.*.local
+
+# Docker
+**/Dockerfile
+**/.dockerignore
+
+# Kubernetes secrets
+**/secrets.yaml
+**/*-secret.yaml
+**/secrets/
+
+# Terraform
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfvars
+**/terraform.tfvars
+
+# Helm
+**/charts/
+**/Chart.lock
+
+# Node modules
+node_modules/
+**/node_modules/
+
+# Build outputs
+*.class
+*.jar
+*.war
+*.ear
+
+# Test outputs
+test-output/
+surefire-reports/
+failsafe-reports/
+**/test-output/
+
+# Coverage reports
+coverage/
+.jacoco/
+**/jacoco.exec
+
+# Secret files
+*.pem
+*.key
+*.crt
+*.p12
+*.jks
+*.keystore
+*.truststore
+secrets/
+**/secrets/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Backup files
+*.bak
+*.backup
+*.old
+*.orig
+
+# Temp files
+*.tmp
+*.temp
+*.swp
+*.swo
+
+# Heap dumps
+*.hprof
+*.dump
+
+# Application specific
+**/application-local.yml
+**/application-*.local.yml
+**/banner.txt
+
+# Edge processor
+**/__pycache__/
+**/*.pyc
+**/venv/
+**/.venv/
+**/env/
+**/.env/
+
+# Load test results
+load-tests/results/
+**/results/
+
+# Prototypes
+prototypes/**/data/
+prototypes/**/output/
+
+# Tools output
+tools/**/output/
+tools/**/temp/
+
+# Script runtime state
+scripts/.state/

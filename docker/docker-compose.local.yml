@@ -1,0 +1,163 @@
+version: '3.8'
+
+services:
+  # ============================================
+  # MongoDB Database
+  # ============================================
+  mongodb:
+    image: mongo:7.0
+    container_name: adavis-mongodb
+    restart: unless-stopped
+    ports:
+      - "37017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: Admin123!
+      MONGO_INITDB_DATABASE: adavis_platform
+    volumes:
+      - mongodb_data:/data/db
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    networks:
+      - adavis-network
+    command: ["mongod", "--bind_ip_all", "--port", "27017"]
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')", "--port", "27017"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ============================================
+  # MongoDB Express (Web UI for MongoDB)
+  # ============================================
+  mongo-express:
+    image: mongo-express:latest
+    container_name: adavis-mongo-express
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: Admin123!
+      ME_CONFIG_MONGODB_URL: mongodb://admin:Admin123!@mongodb:27017/
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: admin
+    networks:
+      - adavis-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  # ============================================
+  # Redis Cache
+  # ============================================
+  redis:
+    image: redis:7.2-alpine
+    container_name: adavis-redis
+    restart: unless-stopped
+    ports:
+      - "8379:6379"
+    command: redis-server --appendonly yes --requirepass Redis123! --port 6379
+    volumes:
+      - redis_data:/data
+    networks:
+      - adavis-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "Redis123!", "--raw", "PING"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ============================================
+  # Redis Insight - Official Redis UI
+  # ============================================
+  redis-insight:
+    image: redis/redisinsight:latest
+    container_name: adavis-redis-insight
+    restart: unless-stopped
+    ports:
+      - "8085:5540"
+    environment:
+      - RI_APP_HOST=0.0.0.0
+      - RI_APP_PORT=5540
+    volumes:
+      - redis_insight_data:/db
+    networks:
+      - adavis-network
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ============================================
+  # Redpanda (Kafka Compatible)
+  # ============================================
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v23.3.4
+    container_name: adavis-redpanda
+    restart: unless-stopped
+    ports:
+      - "10092:9092"
+      - "9644:9644"
+    command:
+      - redpanda
+      - start
+      - --kafka-addr PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr PLAINTEXT://localhost:10092
+      - --mode dev-container
+      - --smp 1
+      - --memory 1G
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    networks:
+      - adavis-network
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ============================================
+  # Redpanda Console (Web UI for Kafka)
+  # ============================================
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:v2.6.0
+    container_name: adavis-redpanda-console
+    restart: unless-stopped
+    ports:
+      - "8086:8080"
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+    networks:
+      - adavis-network
+    depends_on:
+      redpanda:
+        condition: service_healthy
+
+  # ============================================
+  # MailHog (SMTP Test Server)
+  # ============================================
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: adavis-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - adavis-network
+
+networks:
+  adavis-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+    driver: local
+  redis_data:
+    driver: local
+  redis_insight_data:
+    driver: local
+  redpanda_data:
+    driver: local

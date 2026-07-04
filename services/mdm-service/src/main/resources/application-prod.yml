@@ -1,0 +1,39 @@
+server:
+  port: 9083
+
+spring:
+  data:
+    mongodb:
+      uri: ${MONGODB_URI}
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
+
+logging:
+  level:
+    com.adavis.mdm: INFO
+    org.springframework.data.mongodb: WARN
+
+mdm:
+  bulk:
+    batch-size: 1000
+  export:
+    retention-days: 30
+  dms:
+    storage:
+      provider: ${DMS_STORAGE_PROVIDER}
+      local:
+        root-path: ${DMS_STORAGE_LOCAL_ROOT_PATH}
+      cloud:
+        root-path: ${DMS_STORAGE_CLOUD_ROOT_PATH}
+        bucket-name: ${DMS_STORAGE_CLOUD_BUCKET}
+    download-url-ttl-minutes: ${DMS_DOWNLOAD_URL_TTL_MINUTES:15}
+
+services:
+  auth:
+    base-url: ${AUTH_SERVICE_BASE_URL}
+  license:
+    base-url: ${LICENSE_SERVICE_BASE_URL}
+  audit:
+    base-url: ${AUDIT_SERVICE_BASE_URL}

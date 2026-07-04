@@ -1,0 +1,38 @@
+spring:
+  config:
+    activate:
+      on-profile: aws
+
+  data:
+    mongodb:
+      uri: ${MONGODB_URI}
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+  mail:
+    host: ${MAIL_HOST}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:true}
+          starttls:
+            enable: ${MAIL_SMTP_STARTTLS:true}
+
+services:
+  audit:
+    base-url: ${AUDIT_SERVICE_BASE_URL:http://audit-service:8084}
+  mdm:
+    base-url: ${MDM_SERVICE_BASE_URL:http://mdm-service:9083}
+  license:
+    base-url: ${LICENSE_SERVICE_BASE_URL:http://license-service:8082}
+
+logging:
+  level:
+    com.adavis.auth: INFO
+    org.springframework.security: INFO
+    org.springframework.data.mongodb: INFO

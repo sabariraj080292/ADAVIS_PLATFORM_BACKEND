@@ -1,0 +1,181 @@
+name: adavis-platform
+
+services:
+  auth-service:
+    build:
+      context: ../services/auth-service
+      dockerfile: Dockerfile
+    image: adavis/auth-service:aws
+    restart: always
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    env_file:
+      - ../.env.aws
+    environment:
+      SPRING_PROFILES_ACTIVE: aws
+      JAVA_OPTS: ${AUTH_JAVA_OPTS:-"-XX:MaxRAMPercentage=70 -XX:+UseG1GC"}
+      JWT_SECRET: ${JWT_SECRET}
+      MONGODB_URI: ${MONGODB_URI}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      MAIL_HOST: ${MAIL_HOST}
+      MAIL_PORT: ${MAIL_PORT}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH}
+      MAIL_SMTP_STARTTLS: ${MAIL_SMTP_STARTTLS}
+      AUDIT_SERVICE_BASE_URL: http://audit-service:8084
+      MDM_SERVICE_BASE_URL: http://mdm-service:9083
+      LICENSE_SERVICE_BASE_URL: http://license-service:8082
+    networks:
+      - adavis-network
+
+  mdm-service:
+    build:
+      context: ../services/mdm-service
+      dockerfile: Dockerfile
+    image: adavis/mdm-service:aws
+    restart: always
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    env_file:
+      - ../.env.aws
+    environment:
+      SPRING_PROFILES_ACTIVE: aws
+      JAVA_OPTS: ${MDM_JAVA_OPTS:-"-XX:MaxRAMPercentage=70 -XX:+UseG1GC"}
+      JWT_SECRET: ${JWT_SECRET}
+      MONGODB_URI: ${MONGODB_URI}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      AUTH_SERVICE_BASE_URL: http://auth-service:9081
+      LICENSE_SERVICE_BASE_URL: http://license-service:8082
+      AUDIT_SERVICE_BASE_URL: http://audit-service:8084
+      DMS_STORAGE_PROVIDER: ${DMS_STORAGE_PROVIDER}
+      DMS_STORAGE_LOCAL_ROOT_PATH: ${DMS_STORAGE_LOCAL_ROOT_PATH}
+      DMS_STORAGE_CLOUD_ROOT_PATH: ${DMS_STORAGE_CLOUD_ROOT_PATH}
+      DMS_STORAGE_CLOUD_BUCKET: ${DMS_STORAGE_CLOUD_BUCKET}
+      DMS_DOWNLOAD_URL_TTL_MINUTES: ${DMS_DOWNLOAD_URL_TTL_MINUTES}
+    volumes:
+      - ../services/mdm-service/data:/app/data
+    networks:
+      - adavis-network
+
+  iiot-service:
+    build:
+      context: ../services/iiot-service
+      dockerfile: Dockerfile
+    image: adavis/iiot-service:aws
+    restart: always
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    env_file:
+      - ../.env.aws
+    environment:
+      SPRING_PROFILES_ACTIVE: aws
+      JAVA_OPTS: ${IIOT_JAVA_OPTS:-"-XX:MaxRAMPercentage=70 -XX:+UseG1GC"}
+      JWT_SECRET: ${JWT_SECRET}
+      MONGODB_URI: ${MONGODB_URI}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    networks:
+      - adavis-network
+
+  license-service:
+    build:
+      context: ../services/license-service
+      dockerfile: Dockerfile
+    image: adavis/license-service:aws
+    restart: always
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    env_file:
+      - ../.env.aws
+    environment:
+      SPRING_PROFILES_ACTIVE: aws
+      JAVA_OPTS: ${LICENSE_JAVA_OPTS:-"-XX:MaxRAMPercentage=70 -XX:+UseG1GC"}
+      JWT_SECRET: ${JWT_SECRET}
+      MONGODB_URI: ${MONGODB_URI}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      LICENSE_PUBLIC_KEY_PATH: /opt/adavis/keys/public_key.pem
+      AUDIT_SERVICE_URL: http://audit-service:8084
+      AUDIT_ENDPOINT: /internal/v1/audit/logs
+    volumes:
+      - ../license_generation_module/keys:/opt/adavis/keys:ro
+    networks:
+      - adavis-network
+
+  audit-service:
+    build:
+      context: ../services/audit-service
+      dockerfile: Dockerfile
+    image: adavis/audit-service:aws
+    restart: always
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    env_file:
+      - ../.env.aws
+    environment:
+      SPRING_PROFILES_ACTIVE: aws
+      JAVA_OPTS: ${AUDIT_JAVA_OPTS:-"-XX:MaxRAMPercentage=70 -XX:+UseG1GC"}
+      MONGODB_URI: ${MONGODB_URI}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
+      KAFKA_TOPIC_AUDIT: ${KAFKA_TOPIC_AUDIT}
+      AUDIT_PORT: 8084
+    networks:
+      - adavis-network
+
+  api-gateway:
+    build:
+      context: ../services/api-gateway
+      dockerfile: Dockerfile
+    image: adavis/api-gateway:aws
+    restart: always
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    env_file:
+      - ../.env.aws
+    environment:
+      SPRING_PROFILES_ACTIVE: aws
+      JAVA_OPTS: ${GATEWAY_JAVA_OPTS:-"-XX:MaxRAMPercentage=70 -XX:+UseG1GC"}
+      JWT_SECRET: ${JWT_SECRET}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      GATEWAY_AUTH_SERVICE_URI: http://auth-service:9081
+      GATEWAY_LICENSE_SERVICE_URI: http://license-service:8082
+      GATEWAY_AUDIT_SERVICE_URI: http://audit-service:8084
+      GATEWAY_MDM_SERVICE_URI: http://mdm-service:9083
+      GATEWAY_IIOT_SERVICE_URI: http://iiot-service:9085
+      MDM_SERVICE_BASE_URL: http://mdm-service:9083
+      LICENSE_SERVICE_BASE_URL: http://license-service:8082
+    ports:
+      - "80:9080"
+    depends_on:
+      auth-service:
+        condition: service_started
+      mdm-service:
+        condition: service_started
+      license-service:
+        condition: service_started
+      audit-service:
+        condition: service_started
+      iiot-service:
+        condition: service_started
+    networks:
+      - adavis-network
+
+networks:
+  adavis-network:
+    driver: bridge

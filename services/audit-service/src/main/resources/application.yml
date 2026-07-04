@@ -1,0 +1,55 @@
+spring:
+  application:
+    name: audit-service
+
+  data:
+    mongodb:
+      uri: ${MONGODB_URI:mongodb://admin:Admin123!@localhost:37017/adavis_platform?authSource=admin}
+      auto-index-creation: false
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:10092}
+    consumer:
+      group-id: audit-service
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+
+server:
+  port: ${AUDIT_PORT:8084}
+
+management:
+  health:
+    redis:
+      enabled: false
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+kafka:
+  topic:
+    audit: ${KAFKA_TOPIC_AUDIT:audit-events}
+  consumer:
+    group-id: audit-service
+
+logging:
+  level:
+    com.adavis: DEBUG
+    org.springframework.kafka: INFO
+    org.springframework.data.mongodb: DEBUG
+
+---
+spring:
+  config:
+    activate:
+      on-profile: docker
+
+  data:
+    mongodb:
+      uri: ${MONGODB_URI:mongodb://mongodb:27017/adavis_audit_db}
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}

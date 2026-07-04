@@ -1,0 +1,56 @@
+server:
+  port: 9083
+  error:
+    include-message: always
+    include-binding-errors: always
+
+spring:
+  application:
+    name: mdm-service
+  
+  data:
+    mongodb:
+      uri: ${MONGODB_URI:mongodb://admin:Admin123!@localhost:37017/adavis_platform?authSource=admin}
+      auto-index-creation: false
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:8379}
+      password: ${REDIS_PASSWORD:Redis123!}
+      timeout: 5000ms
+
+logging:
+  level:
+    com.adavis.mdm: DEBUG
+    org.springframework.data.mongodb: INFO
+
+jwt:
+  secret: ${JWT_SECRET:your-256-bit-secret-key-for-jwt-generation}
+  expiration: 3600000
+  refresh-expiration: 86400000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+mdm:
+  cache:
+    ttl-minutes: 15
+  dms:
+    storage:
+      provider: ${DMS_STORAGE_PROVIDER:LOCAL}
+      local:
+        root-path: ${DMS_STORAGE_LOCAL_ROOT_PATH:./data/dms/local}
+      cloud:
+        root-path: ${DMS_STORAGE_CLOUD_ROOT_PATH:./data/dms/cloud}
+        bucket-name: ${DMS_STORAGE_CLOUD_BUCKET:adavis-dms}
+    download-url-ttl-minutes: ${DMS_DOWNLOAD_URL_TTL_MINUTES:15}
+
+services:
+  auth:
+    base-url: ${AUTH_SERVICE_BASE_URL:http://localhost:9081}
+  license:
+    base-url: ${LICENSE_SERVICE_BASE_URL:http://localhost:8082}
+  audit:
+    base-url: ${AUDIT_SERVICE_BASE_URL:http://localhost:8084}

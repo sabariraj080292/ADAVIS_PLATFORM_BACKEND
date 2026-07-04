@@ -1,0 +1,82 @@
+server:
+  port: 9080
+
+spring:
+  application:
+    name: api-gateway
+  
+  cloud:
+    gateway:
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOriginPatterns: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:8080}
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - PATCH
+              - OPTIONS
+            allowedHeaders: "*"
+            exposedHeaders:
+              - Authorization
+      routes:
+        - id: auth-service
+          uri: ${GATEWAY_AUTH_SERVICE_URI:http://localhost:9081}
+          predicates:
+            - Path=/api/v1/auth/**
+
+        - id: license-service
+          uri: ${GATEWAY_LICENSE_SERVICE_URI:http://localhost:8082}
+          predicates:
+            - Path=/api/v1/mdm/license/**
+
+        - id: audit-service
+          uri: ${GATEWAY_AUDIT_SERVICE_URI:http://localhost:8084}
+          predicates:
+            - Path=/api/v1/audit/**
+
+        - id: mdm-service
+          uri: ${GATEWAY_MDM_SERVICE_URI:http://localhost:9083}
+          predicates:
+            - Path=/api/v1/mdm/**,/api/v1/dms/**
+
+        - id: iiot-service
+          uri: ${GATEWAY_IIOT_SERVICE_URI:http://localhost:9085}
+          predicates:
+            - Path=/api/v1/iiot/**
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:8379}
+      password: ${REDIS_PASSWORD:Redis123!}
+      timeout: 5000ms
+
+jwt:
+  secret: ${JWT_SECRET}
+
+services:
+  mdm:
+    base-url: ${MDM_SERVICE_BASE_URL:http://localhost:9083}
+  license:
+    base-url: ${LICENSE_SERVICE_BASE_URL:http://localhost:8082}
+
+gateway:
+  routes:
+    auth-service-uri: ${GATEWAY_AUTH_SERVICE_URI:http://localhost:9081}
+    license-service-uri: ${GATEWAY_LICENSE_SERVICE_URI:http://localhost:8082}
+    audit-service-uri: ${GATEWAY_AUDIT_SERVICE_URI:http://localhost:8084}
+    mdm-service-uri: ${GATEWAY_MDM_SERVICE_URI:http://localhost:9083}
+
+logging:
+  level:
+    com.adavis.gateway: DEBUG
+    org.springframework.cloud.gateway: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

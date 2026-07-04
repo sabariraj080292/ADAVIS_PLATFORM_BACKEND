@@ -1,0 +1,25 @@
+spring:
+  config:
+    activate:
+      on-profile: aws
+
+  data:
+    mongodb:
+      uri: ${MONGODB_URI}
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+services:
+  auth:
+    base-url: ${AUTH_SERVICE_BASE_URL:http://auth-service:9081}
+  license:
+    base-url: ${LICENSE_SERVICE_BASE_URL:http://license-service:8082}
+  audit:
+    base-url: ${AUDIT_SERVICE_BASE_URL:http://audit-service:8084}
+
+logging:
+  level:
+    com.adavis.mdm: INFO
+    org.springframework.data.mongodb: INFO

@@ -1,0 +1,75 @@
+server:
+  port: 9081
+  error:
+    include-message: always
+    include-binding-errors: always
+
+spring:
+  application:
+    name: auth-service
+
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:false}
+          starttls:
+            enable: ${MAIL_SMTP_STARTTLS:false}
+  
+  data:
+    mongodb:
+      uri: ${MONGODB_URI:mongodb://admin:Admin123!@localhost:37017/adavis_platform?authSource=admin}
+      auto-index-creation: false
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:8379}
+      password: ${REDIS_PASSWORD:Redis123!}
+      timeout: 5000ms
+
+logging:
+  level:
+    com.adavis.auth: DEBUG
+    org.springframework.security: INFO
+    org.springframework.data.mongodb: INFO
+
+jwt:
+  secret: ${JWT_SECRET:your-256-bit-secret-key-for-jwt-generation}
+  expiration: 3600000
+  refresh-expiration: 86400000
+
+account:
+  lockout:
+    max-attempts: 5
+    duration-minutes: 30
+
+session:
+  timeout-minutes: 30
+
+password:
+  policy:
+    min-length: ${PASSWORD_POLICY_MIN_LENGTH:8}
+    require-uppercase: ${PASSWORD_POLICY_REQUIRE_UPPERCASE:true}
+    require-lowercase: ${PASSWORD_POLICY_REQUIRE_LOWERCASE:true}
+    require-numbers: ${PASSWORD_POLICY_REQUIRE_NUMBERS:true}
+    require-special: ${PASSWORD_POLICY_REQUIRE_SPECIAL:true}
+    history-count: ${PASSWORD_POLICY_HISTORY_COUNT:5}
+
+services:
+  audit:
+    base-url: ${AUDIT_SERVICE_BASE_URL:http://localhost:8084}
+
+management:
+  endpoint:
+    health:
+      show-details: always
+  health:
+    mail:
+      enabled: false
+  endpoints:
+    web:
+      exposure:
+        include: health,info
