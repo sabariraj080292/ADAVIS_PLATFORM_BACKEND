@@ -37,13 +37,62 @@ required_dockerfiles=(
   "$REPO_ROOT/services/audit-service/Dockerfile"
 )
 
+required_artifact_patterns=(
+  "$REPO_ROOT/services/api-gateway/target/*.jar"
+  "$REPO_ROOT/services/auth-service/target/*.jar"
+  "$REPO_ROOT/services/mdm-service/target/*.jar"
+  "$REPO_ROOT/services/iiot-service/target/*.jar"
+  "$REPO_ROOT/services/license-service/target/license-service-*.jar"
+  "$REPO_ROOT/services/audit-service/target/audit-service-*.jar"
+)
+
 for dockerfile in "${required_dockerfiles[@]}"; do
   if [ ! -f "$dockerfile" ]; then
     echo "Missing Dockerfile: $dockerfile" >&2
     echo "Ensure Dockerfiles are committed to git and available on this host." >&2
     exit 1
   fi
+
+  if grep -Eq '^FROM[[:space:]]+openjdk:21-jdk-slim([[:space:]]|$)' "$dockerfile"; then
+    echo "Invalid base image detected in $dockerfile: openjdk:21-jdk-slim" >&2
+    echo "Use a valid Java 21 image such as eclipse-temurin:21-jdk-jammy." >&2
+    exit 1
+  fi
 done
+
+missing_artifacts=0
+for artifact_pattern in "${required_artifact_patterns[@]}"; do
+  if ! compgen -G "$artifact_pattern" >/dev/null; then
+    missing_artifacts=1
+    break
+  fi
+done
+
+if [ "$missing_artifacts" -eq 1 ]; then
+  echo "Required service JARs are missing. Building Maven artifacts before docker compose..."
+
+  if ! command -v id >/dev/null 2>&1; then
+    echo "Unable to resolve current user id. Install coreutils (id) and retry." >&2
+    exit 1
+  fi
+
+  mkdir -p "$HOME/.m2"
+  docker run --rm \
+    --user "$(id -u):$(id -g)" \
+    -v "$REPO_ROOT:/workspace" \
+    -v "$HOME/.m2:/var/maven/.m2" \
+    -w /workspace \
+    -e MAVEN_CONFIG=/var/maven/.m2 \
+    maven:3.9.9-eclipse-temurin-21 \
+    mvn -DskipTests clean package
+
+  for artifact_pattern in "${required_artifact_patterns[@]}"; do
+    if ! compgen -G "$artifact_pattern" >/dev/null; then
+      echo "Missing expected artifact after Maven build: $artifact_pattern" >&2
+      exit 1
+    fi
+  done
+fi
 
 required_keys=(
   JWT_SECRET
