@@ -1,6 +1,73 @@
 name: adavis-platform
 
 services:
+  mongodb:
+    image: mongo:7.0
+    container_name: adavis-mongodb
+    restart: always
+    ports:
+      - "37017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: Admin123!
+      MONGO_INITDB_DATABASE: adavis_platform
+    volumes:
+      - mongodb_data:/data/db
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    networks:
+      - adavis-network
+    command: ["mongod", "--bind_ip_all", "--port", "27017"]
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')", "--port", "27017"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: adavis-redis
+    restart: always
+    ports:
+      - "8379:6379"
+    command: redis-server --appendonly yes --requirepass Redis123! --port 6379
+    volumes:
+      - redis_data:/data
+    networks:
+      - adavis-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "Redis123!", "--raw", "PING"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v23.3.4
+    container_name: adavis-redpanda
+    restart: always
+    ports:
+      - "10092:9092"
+      - "9644:9644"
+    command:
+      - redpanda
+      - start
+      - --kafka-addr PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr PLAINTEXT://redpanda:9092
+      - --mode dev-container
+      - --smp 1
+      - --memory 1G
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    networks:
+      - adavis-network
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
   auth-service:
     build:
       context: ../services/auth-service
@@ -16,9 +83,9 @@ services:
       SPRING_PROFILES_ACTIVE: aws
       JAVA_OPTS: ${AUTH_JAVA_OPTS:-"-XX:MaxRAMPercentage=70 -XX:+UseG1GC"}
       JWT_SECRET: ${JWT_SECRET}
-      MONGODB_URI: mongodb://admin:Admin123!@${EC2_HOST_IP:-127.0.0.1}:37017/adavis_platform?authSource=admin
-      REDIS_HOST: ${EC2_HOST_IP:-127.0.0.1}
-      REDIS_PORT: ${REDIS_PORT}
+      MONGODB_URI: mongodb://admin:Admin123!@mongodb:27017/adavis_platform?authSource=admin
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       MAIL_HOST: ${MAIL_HOST}
       MAIL_PORT: ${MAIL_PORT}
@@ -47,9 +114,9 @@ services:
       SPRING_PROFILES_ACTIVE: aws
       JAVA_OPTS: ${MDM_JAVA_OPTS:-"-XX:MaxRAMPercentage=70 -XX:+UseG1GC"}
       JWT_SECRET: ${JWT_SECRET}
-      MONGODB_URI: mongodb://admin:Admin123!@${EC2_HOST_IP:-127.0.0.1}:37017/adavis_platform?authSource=admin
-      REDIS_HOST: ${EC2_HOST_IP:-127.0.0.1}
-      REDIS_PORT: ${REDIS_PORT}
+      MONGODB_URI: mongodb://admin:Admin123!@mongodb:27017/adavis_platform?authSource=admin
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       AUTH_SERVICE_BASE_URL: http://auth-service:9081
       LICENSE_SERVICE_BASE_URL: http://license-service:8082
@@ -79,9 +146,9 @@ services:
       SPRING_PROFILES_ACTIVE: aws
       JAVA_OPTS: ${IIOT_JAVA_OPTS:-"-XX:MaxRAMPercentage=70 -XX:+UseG1GC"}
       JWT_SECRET: ${JWT_SECRET}
-      MONGODB_URI: mongodb://admin:Admin123!@${EC2_HOST_IP:-127.0.0.1}:37017/adavis_platform?authSource=admin
-      REDIS_HOST: ${EC2_HOST_IP:-127.0.0.1}
-      REDIS_PORT: ${REDIS_PORT}
+      MONGODB_URI: mongodb://admin:Admin123!@mongodb:27017/adavis_platform?authSource=admin
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     networks:
       - adavis-network
@@ -101,9 +168,9 @@ services:
       SPRING_PROFILES_ACTIVE: aws
       JAVA_OPTS: ${LICENSE_JAVA_OPTS:-"-XX:MaxRAMPercentage=70 -XX:+UseG1GC"}
       JWT_SECRET: ${JWT_SECRET}
-      MONGODB_URI: mongodb://admin:Admin123!@${EC2_HOST_IP:-127.0.0.1}:37017/adavis_platform?authSource=admin
-      REDIS_HOST: ${EC2_HOST_IP:-127.0.0.1}
-      REDIS_PORT: ${REDIS_PORT}
+      MONGODB_URI: mongodb://admin:Admin123!@mongodb:27017/adavis_platform?authSource=admin
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       LICENSE_PUBLIC_KEY_PATH: /opt/adavis/keys/public_key.pem
       AUDIT_SERVICE_URL: http://audit-service:8084
@@ -127,8 +194,8 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: aws
       JAVA_OPTS: ${AUDIT_JAVA_OPTS:-"-XX:MaxRAMPercentage=70 -XX:+UseG1GC"}
-      MONGODB_URI: mongodb://admin:Admin123!@${EC2_HOST_IP:-127.0.0.1}:37017/adavis_platform?authSource=admin
-      KAFKA_BOOTSTRAP_SERVERS: ${EC2_HOST_IP:-127.0.0.1}:10092
+      MONGODB_URI: mongodb://admin:Admin123!@mongodb:27017/adavis_platform?authSource=admin
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       KAFKA_TOPIC_AUDIT: ${KAFKA_TOPIC_AUDIT}
       AUDIT_PORT: 8084
     networks:
@@ -149,10 +216,10 @@ services:
       SPRING_PROFILES_ACTIVE: aws
       JAVA_OPTS: ${GATEWAY_JAVA_OPTS:-"-XX:MaxRAMPercentage=70 -XX:+UseG1GC"}
       JWT_SECRET: ${JWT_SECRET}
-      MONGODB_URI: mongodb://admin:Admin123!@${EC2_HOST_IP:-127.0.0.1}:37017/adavis_platform?authSource=admin
-      SPRING_DATA_MONGODB_URI: mongodb://admin:Admin123!@${EC2_HOST_IP:-127.0.0.1}:37017/adavis_platform?authSource=admin
-      REDIS_HOST: ${EC2_HOST_IP:-127.0.0.1}
-      REDIS_PORT: ${REDIS_PORT}
+      MONGODB_URI: mongodb://admin:Admin123!@mongodb:27017/adavis_platform?authSource=admin
+      SPRING_DATA_MONGODB_URI: mongodb://admin:Admin123!@mongodb:27017/adavis_platform?authSource=admin
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
       GATEWAY_AUTH_SERVICE_URI: http://auth-service:9081
@@ -165,6 +232,12 @@ services:
     ports:
       - "80:9080"
     depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
       auth-service:
         condition: service_started
       mdm-service:
@@ -181,3 +254,11 @@ services:
 networks:
   adavis-network:
     driver: bridge
+
+volumes:
+  mongodb_data:
+    driver: local
+  redis_data:
+    driver: local
+  redpanda_data:
+    driver: local
