@@ -12,6 +12,7 @@ import com.adavis.dto.auth.response.SessionResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,6 +21,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
+@Slf4j
 public class AuthenticationController {
 
     private final AuthenticationService authService;
@@ -36,7 +38,9 @@ public class AuthenticationController {
     @PostMapping("/login-initiate")
     public ResponseEntity<ApiResponse<LoginInitiateResponse>> initiateLogin(
             @Valid @RequestBody LoginInitiateRequest request) {
+        log.info("Received login-initiate request for identifier={}", request.getIdentifier());
         LoginInitiateResponse response = authService.initiateLogin(request.getIdentifier());
+        log.info("Completed login-initiate request for identifier={}", request.getIdentifier());
         return ResponseEntity.ok(ApiResponse.success("User verified", response));
     }
 
@@ -49,12 +53,14 @@ public class AuthenticationController {
             HttpServletRequest httpRequest) {
         String deviceInfo = httpRequest.getHeader("User-Agent");
         String ipAddress = getClientIp(httpRequest);
+        log.info("Received authenticate request for identifier={} from ip={}", request.getIdentifier(), ipAddress);
         AuthResponse response = authService.login(
                 request.getIdentifier(),
                 request.getPassword(),
                 deviceInfo,
                 ipAddress
         );
+        log.info("Completed authenticate request for identifier={} from ip={}", request.getIdentifier(), ipAddress);
         return ResponseEntity.ok(ApiResponse.success("Login successful", response));
     }
 

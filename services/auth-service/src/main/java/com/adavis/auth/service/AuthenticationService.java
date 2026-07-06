@@ -64,9 +64,13 @@ public class AuthenticationService {
     private final RestTemplate restTemplate = new RestTemplate();
 
     public LoginInitiateResponse initiateLogin(String identifier) {
+        log.info("Initiating login lookup for identifier={}", identifier);
         User user = findUserByIdentifier(identifier);
+        log.info("Found user for login-initiate: userId={}, identifier={}", user.getUserId(), identifier);
         Credential credential = credentialRepository.findByUserId(user.getUserId())
                 .orElseThrow(() -> new UnauthorizedException("Password not set for this user"));
+
+        log.info("Credential lookup completed for userId={}, passwordSet={}", user.getUserId(), credential.getPasswordHash() != null);
 
         return LoginInitiateResponse.builder()
                 .userId(user.getUserId())

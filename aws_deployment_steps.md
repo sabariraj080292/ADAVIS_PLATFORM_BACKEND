@@ -107,3 +107,18 @@ docker compose --env-file .env.aws -f docker/docker-compose.aws.yml logs --tail=
 docker compose --env-file .env.aws -f docker/docker-compose.aws.yml logs --tail=200 mdm-service
 docker compose --env-file .env.aws -f docker/docker-compose.aws.yml logs --tail=200 api-gateway
 
+
+df -h
+docker system df
+
+docker compose -f docker/docker-compose.aws.yml down
+docker system prune -af
+docker builder prune -af
+
+docker compose -f docker/docker-compose.aws.yml down
+docker system prune -af
+docker builder prune -af
+
+docker volume prune -f
+
+docker compose --env-file .env.aws -f docker/docker-compose.aws.yml up -d --build

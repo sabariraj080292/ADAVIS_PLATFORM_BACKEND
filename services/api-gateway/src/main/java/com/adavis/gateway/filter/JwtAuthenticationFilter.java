@@ -56,10 +56,11 @@ public class JwtAuthenticationFilter implements GatewayFilter, Ordered {
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         ServerHttpRequest request = exchange.getRequest();
         String path = request.getPath().toString();
+        log.info("Gateway received {} {}", request.getMethod(), path);
 
         // Allow public paths
         if (isPublicPath(path)) {
-            log.debug("Public path accessed: {}", path);
+            log.info("Public path allowed without JWT: {}", path);
             return chain.filter(exchange);
         }
 
@@ -84,6 +85,7 @@ public class JwtAuthenticationFilter implements GatewayFilter, Ordered {
 
                     if (isLicenseBypassPath(path) || SUPER_ADMIN_USER_ID.equalsIgnoreCase(userId)) {
                         ServerHttpRequest bypassRequest = buildTrustedRequestHeaders(request, userId, username, null);
+                        log.info("Gateway bypassing license check for path={} userId={}", path, userId);
                         return chain.filter(exchange.mutate().request(bypassRequest).build());
                     }
 
@@ -94,7 +96,7 @@ public class JwtAuthenticationFilter implements GatewayFilter, Ordered {
                                             return licenseExpired(exchange.getResponse());
                                         }
                                         ServerHttpRequest mutatedRequest = buildTrustedRequestHeaders(request, userId, username, tenantId);
-                                        log.debug("Authenticated user: {} for path: {}", username, path);
+                                        log.info("Authenticated user: {} for path: {} tenantId={}", username, path, tenantId);
                                         return chain.filter(exchange.mutate().request(mutatedRequest).build());
                                     }))
                             .onErrorResume(ex -> {
