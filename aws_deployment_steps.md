@@ -56,6 +56,7 @@ nano .env.aws
 Required keys in `.env.aws`:
 
 - `JWT_SECRET`
+- `EC2_HOST_IP`
 - `MONGODB_URI`
 - `REDIS_HOST`
 - `REDIS_PORT`
@@ -65,8 +66,8 @@ Required keys in `.env.aws`:
 Important:
 
 - Do not leave dependency URLs on `localhost` unless those services are running on the same EC2 host.
-- If MongoDB, Redis, or Kafka are external services, point the env values to those endpoints.
-- If you keep all dependencies on the same EC2 host for testing, make sure the ports and container network are consistent with your own setup.
+- For same-host EC2 testing, set `EC2_HOST_IP` to the instance private IP and let the AWS compose file derive MongoDB, Redis, and Kafka endpoints from it.
+- If MongoDB, Redis, or Kafka are external services, point the env values to those endpoints instead.
 
 5. Build and deploy
 
