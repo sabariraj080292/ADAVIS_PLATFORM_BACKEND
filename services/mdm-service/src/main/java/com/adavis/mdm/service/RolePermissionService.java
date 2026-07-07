@@ -29,12 +29,16 @@ public class RolePermissionService {
         if (rolePermission.getIsActive() == null) {
             rolePermission.setIsActive(true);
         }
-        if (rolePermission.getVersion() == null || rolePermission.getVersion() < 1) {
-            rolePermission.setVersion(1);
-        }
 
         Optional<RolePermission> existing = rolePermissionRepository.findByRoleIdAndModuleId(roleId, rolePermission.getModuleId());
-        existing.ifPresent(value -> rolePermission.setId(value.getId()));
+        if (existing.isPresent()) {
+            RolePermission current = existing.get();
+            rolePermission.setId(current.getId());
+            int currentVersion = current.getVersion() == null || current.getVersion() < 1 ? 0 : current.getVersion();
+            rolePermission.setVersion(currentVersion + 1);
+        } else {
+            rolePermission.setVersion(1);
+        }
 
         RolePermission saved = rolePermissionRepository.save(rolePermission);
         auditEventPublisher.publish(

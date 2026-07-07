@@ -16,10 +16,7 @@ public class AuthResponse {
     private String tokenType;
     private Long expiresIn;
     private Long refreshExpiresIn;
+    private String sessionId;
     private String userId;
-    private String username;
-    private String email;
-    private String firstName;
-    private String lastName;
     private String tenantId;
 }

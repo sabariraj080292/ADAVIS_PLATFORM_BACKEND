@@ -26,6 +26,7 @@ import java.util.Map;
 public class PlantTopologyController {
 
     private static final String INTERNAL_AUTH_HEADER = "X-Internal-Auth";
+    private static final String USER_ID_HEADER = "X-User-Id";
 
     private final PlantTopologyService plantTopologyService;
     private final InternalRequestValidator internalRequestValidator;
@@ -33,10 +34,11 @@ public class PlantTopologyController {
     @PostMapping("/plants")
     public ResponseEntity<ApiResponse<Map<String, Object>>> createPlant(
             @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth,
+            @RequestHeader(value = USER_ID_HEADER, required = false) String currentUserId,
             @RequestBody Map<String, Object> request) {
         internalRequestValidator.validateInternalGatewayRequest(internalAuth);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Plant created successfully", plantTopologyService.createPlant(request)));
+                .body(ApiResponse.success("Plant created successfully", plantTopologyService.createPlant(request, currentUserId)));
     }
 
     @GetMapping("/plants")
@@ -54,44 +56,49 @@ public class PlantTopologyController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> updatePlant(
             @PathVariable String plantId,
             @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth,
+            @RequestHeader(value = USER_ID_HEADER, required = false) String currentUserId,
             @RequestBody Map<String, Object> request) {
         internalRequestValidator.validateInternalGatewayRequest(internalAuth);
-        return ResponseEntity.ok(ApiResponse.success("Plant updated successfully", plantTopologyService.updatePlant(plantId, request)));
+        return ResponseEntity.ok(ApiResponse.success("Plant updated successfully", plantTopologyService.updatePlant(plantId, request, currentUserId)));
     }
 
     @DeleteMapping("/plants/{plantId}")
     public ResponseEntity<ApiResponse<Void>> deletePlant(
             @PathVariable String plantId,
-            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth) {
+            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth,
+            @RequestHeader(value = USER_ID_HEADER, required = false) String currentUserId) {
         internalRequestValidator.validateInternalGatewayRequest(internalAuth);
-        plantTopologyService.deletePlant(plantId);
+        plantTopologyService.deletePlant(plantId, currentUserId);
         return ResponseEntity.ok(ApiResponse.successMessage("Plant deleted successfully"));
     }
 
     @PostMapping("/plants/{plantId}/deactivate")
     public ResponseEntity<ApiResponse<Void>> deactivatePlant(
             @PathVariable String plantId,
-            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth) {
+            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth,
+            @RequestHeader(value = USER_ID_HEADER, required = false) String currentUserId) {
         internalRequestValidator.validateInternalGatewayRequest(internalAuth);
-        plantTopologyService.deletePlant(plantId);
+        plantTopologyService.deletePlant(plantId, currentUserId);
         return ResponseEntity.ok(ApiResponse.successMessage("Plant deactivated successfully"));
     }
 
     @PostMapping("/plants/{plantId}/activate")
     public ResponseEntity<ApiResponse<Map<String, Object>>> reactivatePlant(
             @PathVariable String plantId,
-            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth) {
+            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth,
+            @RequestHeader(value = USER_ID_HEADER, required = false) String currentUserId) {
         internalRequestValidator.validateInternalGatewayRequest(internalAuth);
-        return ResponseEntity.ok(ApiResponse.success("Plant reactivated successfully", plantTopologyService.reactivatePlant(plantId)));
+        return ResponseEntity.ok(ApiResponse.success("Plant reactivated successfully", plantTopologyService.reactivatePlant(plantId, currentUserId)));
     }
 
     @PostMapping("/blocks")
     public ResponseEntity<ApiResponse<Map<String, Object>>> createBlock(
             @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth,
+            @RequestHeader(value = USER_ID_HEADER, required = false) String currentUserId,
             @RequestBody Map<String, Object> request) {
         internalRequestValidator.validateInternalGatewayRequest(internalAuth);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Block created successfully", plantTopologyService.createBlock(request)));
+                .body(ApiResponse.success("Block created successfully", plantTopologyService.createBlock(request, currentUserId)));
     }
 
     @GetMapping("/blocks")
@@ -104,44 +111,49 @@ public class PlantTopologyController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> updateBlock(
             @PathVariable String blockId,
             @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth,
+            @RequestHeader(value = USER_ID_HEADER, required = false) String currentUserId,
             @RequestBody Map<String, Object> request) {
         internalRequestValidator.validateInternalGatewayRequest(internalAuth);
-        return ResponseEntity.ok(ApiResponse.success("Block updated successfully", plantTopologyService.updateBlock(blockId, request)));
+        return ResponseEntity.ok(ApiResponse.success("Block updated successfully", plantTopologyService.updateBlock(blockId, request, currentUserId)));
     }
 
     @DeleteMapping("/blocks/{blockId}")
     public ResponseEntity<ApiResponse<Void>> deleteBlock(
             @PathVariable String blockId,
-            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth) {
+            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth,
+            @RequestHeader(value = USER_ID_HEADER, required = false) String currentUserId) {
         internalRequestValidator.validateInternalGatewayRequest(internalAuth);
-        plantTopologyService.deleteBlock(blockId);
+        plantTopologyService.deleteBlock(blockId, currentUserId);
         return ResponseEntity.ok(ApiResponse.successMessage("Block deleted successfully"));
     }
 
     @PostMapping("/blocks/{blockId}/deactivate")
     public ResponseEntity<ApiResponse<Void>> deactivateBlock(
             @PathVariable String blockId,
-            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth) {
+            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth,
+            @RequestHeader(value = USER_ID_HEADER, required = false) String currentUserId) {
         internalRequestValidator.validateInternalGatewayRequest(internalAuth);
-        plantTopologyService.deleteBlock(blockId);
+        plantTopologyService.deleteBlock(blockId, currentUserId);
         return ResponseEntity.ok(ApiResponse.successMessage("Block deactivated successfully"));
     }
 
     @PostMapping("/blocks/{blockId}/activate")
     public ResponseEntity<ApiResponse<Map<String, Object>>> reactivateBlock(
             @PathVariable String blockId,
-            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth) {
+            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth,
+            @RequestHeader(value = USER_ID_HEADER, required = false) String currentUserId) {
         internalRequestValidator.validateInternalGatewayRequest(internalAuth);
-        return ResponseEntity.ok(ApiResponse.success("Block reactivated successfully", plantTopologyService.reactivateBlock(blockId)));
+        return ResponseEntity.ok(ApiResponse.success("Block reactivated successfully", plantTopologyService.reactivateBlock(blockId, currentUserId)));
     }
 
     @PostMapping("/areas")
     public ResponseEntity<ApiResponse<Map<String, Object>>> createArea(
             @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth,
+            @RequestHeader(value = USER_ID_HEADER, required = false) String currentUserId,
             @RequestBody Map<String, Object> request) {
         internalRequestValidator.validateInternalGatewayRequest(internalAuth);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Area created successfully", plantTopologyService.createArea(request)));
+                .body(ApiResponse.success("Area created successfully", plantTopologyService.createArea(request, currentUserId)));
     }
 
     @GetMapping("/areas")
@@ -154,44 +166,49 @@ public class PlantTopologyController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> updateArea(
             @PathVariable String areaId,
             @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth,
+            @RequestHeader(value = USER_ID_HEADER, required = false) String currentUserId,
             @RequestBody Map<String, Object> request) {
         internalRequestValidator.validateInternalGatewayRequest(internalAuth);
-        return ResponseEntity.ok(ApiResponse.success("Area updated successfully", plantTopologyService.updateArea(areaId, request)));
+        return ResponseEntity.ok(ApiResponse.success("Area updated successfully", plantTopologyService.updateArea(areaId, request, currentUserId)));
     }
 
     @DeleteMapping("/areas/{areaId}")
     public ResponseEntity<ApiResponse<Void>> deleteArea(
             @PathVariable String areaId,
-            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth) {
+            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth,
+            @RequestHeader(value = USER_ID_HEADER, required = false) String currentUserId) {
         internalRequestValidator.validateInternalGatewayRequest(internalAuth);
-        plantTopologyService.deleteArea(areaId);
+        plantTopologyService.deleteArea(areaId, currentUserId);
         return ResponseEntity.ok(ApiResponse.successMessage("Area deleted successfully"));
     }
 
     @PostMapping("/areas/{areaId}/deactivate")
     public ResponseEntity<ApiResponse<Void>> deactivateArea(
             @PathVariable String areaId,
-            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth) {
+            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth,
+            @RequestHeader(value = USER_ID_HEADER, required = false) String currentUserId) {
         internalRequestValidator.validateInternalGatewayRequest(internalAuth);
-        plantTopologyService.deleteArea(areaId);
+        plantTopologyService.deleteArea(areaId, currentUserId);
         return ResponseEntity.ok(ApiResponse.successMessage("Area deactivated successfully"));
     }
 
     @PostMapping("/areas/{areaId}/activate")
     public ResponseEntity<ApiResponse<Map<String, Object>>> reactivateArea(
             @PathVariable String areaId,
-            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth) {
+            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth,
+            @RequestHeader(value = USER_ID_HEADER, required = false) String currentUserId) {
         internalRequestValidator.validateInternalGatewayRequest(internalAuth);
-        return ResponseEntity.ok(ApiResponse.success("Area reactivated successfully", plantTopologyService.reactivateArea(areaId)));
+        return ResponseEntity.ok(ApiResponse.success("Area reactivated successfully", plantTopologyService.reactivateArea(areaId, currentUserId)));
     }
 
     @PostMapping("/rooms")
     public ResponseEntity<ApiResponse<Map<String, Object>>> createRoom(
             @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth,
+            @RequestHeader(value = USER_ID_HEADER, required = false) String currentUserId,
             @RequestBody Map<String, Object> request) {
         internalRequestValidator.validateInternalGatewayRequest(internalAuth);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Room created successfully", plantTopologyService.createRoom(request)));
+                .body(ApiResponse.success("Room created successfully", plantTopologyService.createRoom(request, currentUserId)));
     }
 
     @GetMapping("/rooms")
@@ -204,34 +221,38 @@ public class PlantTopologyController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> updateRoom(
             @PathVariable String roomId,
             @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth,
+            @RequestHeader(value = USER_ID_HEADER, required = false) String currentUserId,
             @RequestBody Map<String, Object> request) {
         internalRequestValidator.validateInternalGatewayRequest(internalAuth);
-        return ResponseEntity.ok(ApiResponse.success("Room updated successfully", plantTopologyService.updateRoom(roomId, request)));
+        return ResponseEntity.ok(ApiResponse.success("Room updated successfully", plantTopologyService.updateRoom(roomId, request, currentUserId)));
     }
 
     @DeleteMapping("/rooms/{roomId}")
     public ResponseEntity<ApiResponse<Void>> deleteRoom(
             @PathVariable String roomId,
-            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth) {
+            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth,
+            @RequestHeader(value = USER_ID_HEADER, required = false) String currentUserId) {
         internalRequestValidator.validateInternalGatewayRequest(internalAuth);
-        plantTopologyService.deleteRoom(roomId);
+        plantTopologyService.deleteRoom(roomId, currentUserId);
         return ResponseEntity.ok(ApiResponse.successMessage("Room deleted successfully"));
     }
 
     @PostMapping("/rooms/{roomId}/deactivate")
     public ResponseEntity<ApiResponse<Void>> deactivateRoom(
             @PathVariable String roomId,
-            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth) {
+            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth,
+            @RequestHeader(value = USER_ID_HEADER, required = false) String currentUserId) {
         internalRequestValidator.validateInternalGatewayRequest(internalAuth);
-        plantTopologyService.deleteRoom(roomId);
+        plantTopologyService.deleteRoom(roomId, currentUserId);
         return ResponseEntity.ok(ApiResponse.successMessage("Room deactivated successfully"));
     }
 
     @PostMapping("/rooms/{roomId}/activate")
     public ResponseEntity<ApiResponse<Map<String, Object>>> reactivateRoom(
             @PathVariable String roomId,
-            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth) {
+            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth,
+            @RequestHeader(value = USER_ID_HEADER, required = false) String currentUserId) {
         internalRequestValidator.validateInternalGatewayRequest(internalAuth);
-        return ResponseEntity.ok(ApiResponse.success("Room reactivated successfully", plantTopologyService.reactivateRoom(roomId)));
+        return ResponseEntity.ok(ApiResponse.success("Room reactivated successfully", plantTopologyService.reactivateRoom(roomId, currentUserId)));
     }
 }

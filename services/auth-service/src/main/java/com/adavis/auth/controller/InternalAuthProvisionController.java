@@ -7,10 +7,14 @@ import com.adavis.common.dto.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/internal/v1/auth/users")
@@ -30,5 +34,10 @@ public class InternalAuthProvisionController {
     public ResponseEntity<ApiResponse<Void>> updateUserStatus(@Valid @RequestBody UserStatusUpdateRequest request) {
         authService.updateUserStatus(request.getUserId(), request.getStatus(), request.getIsLocked());
         return ResponseEntity.ok(ApiResponse.successMessage("User status updated"));
+    }
+
+    @GetMapping("/{userId}/lock-status")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getUserLockStatus(@PathVariable String userId) {
+        return ResponseEntity.ok(ApiResponse.success(authService.getUserLockStatus(userId)));
     }
 }

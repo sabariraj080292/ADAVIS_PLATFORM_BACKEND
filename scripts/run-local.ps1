@@ -2,8 +2,6 @@
 param(
     [switch]$SkipDocker,
     [switch]$BuildFirst,
-    [switch]$SkipSeed,
-    [switch]$NoReset,
     [switch]$ForceRestart,
     [string[]]$SkipServices = @(),
     [int]$FailureLogTailLines = 80,
@@ -40,15 +38,6 @@ if (-not $SkipDocker) {
 if ($BuildFirst) {
     & (Join-Path $PSScriptRoot "build-all.ps1") -SkipTests
 }
-
-# if (-not $SkipSeed) {
-#     if ($NoReset) {
-#         & (Join-Path $PSScriptRoot "seed-data.ps1") -NoReset
-#     }
-#     else {
-#         & (Join-Path $PSScriptRoot "seed-data.ps1")
-#     }
-# }
 
 if ([string]::IsNullOrWhiteSpace($env:JWT_SECRET) -or $env:JWT_SECRET.Length -lt 32) {
     $env:JWT_SECRET = "local-dev-jwt-secret-key-256-bits-minimum!"

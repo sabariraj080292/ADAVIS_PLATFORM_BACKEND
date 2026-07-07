@@ -11,7 +11,8 @@ public class UserValidator {
         if (user.getUsername() == null || user.getUsername().trim().isEmpty()) {
             throw new BusinessException("Username is required", "USERNAME_REQUIRED");
         }
-        if (user.getEmail() == null || !user.getEmail().matches("^[A-Za-z0-9+_.-]+@(.+)$")) {
+        if (user.getEmail() != null && !user.getEmail().isBlank()
+                && !user.getEmail().matches("^[A-Za-z0-9+_.-]+@(.+)$")) {
             throw new BusinessException("Invalid email format", "INVALID_EMAIL");
         }
         if (user.getFirstName() == null || user.getFirstName().trim().isEmpty()) {

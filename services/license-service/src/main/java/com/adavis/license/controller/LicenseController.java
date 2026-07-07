@@ -17,10 +17,15 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class LicenseController {
 
+    private static final String USER_ID_HEADER = "X-User-Id";
+
     private final LicenseService licenseService;
 
     @PostMapping("/tenant")
-    public ApiResponse<LicenseResponse> activateLicense(@Valid @RequestBody ApplyLicenseRequest request) {
+    public ApiResponse<LicenseResponse> activateLicense(
+            @RequestHeader(value = USER_ID_HEADER, required = false) String currentUserId,
+            @Valid @RequestBody ApplyLicenseRequest request) {
+        request.setPerformedBy(firstNonBlank(request.getPerformedBy(), currentUserId));
         LicenseResponse response = licenseService.applyLicense(request);
         return ApiResponse.success("License action applied successfully", response);
     }
@@ -33,6 +38,7 @@ public class LicenseController {
     @PutMapping("/{licenseId}/upgrade")
     public ApiResponse<LicenseResponse> upgradeLicense(
             @PathVariable String licenseId,
+            @RequestHeader(value = USER_ID_HEADER, required = false) String currentUserId,
             @RequestBody Map<String, Object> request) {
         return ApiResponse.success(
                 "License action applied successfully",
@@ -42,12 +48,13 @@ public class LicenseController {
                         toStringList(request.get("modules")),
                         toInteger(request.get("maxUsers")),
                         toText(request.get("reason")),
-                        toText(request.get("upgradedBy"))));
+                        firstNonBlank(toText(request.get("upgradedBy")), currentUserId)));
     }
 
                 @PutMapping("/tenant/{tenantId}/upgrade")
                 public ApiResponse<LicenseResponse> upgradeLicenseByTenant(
                     @PathVariable String tenantId,
+                    @RequestHeader(value = USER_ID_HEADER, required = false) String currentUserId,
                     @RequestBody Map<String, Object> request) {
                 return ApiResponse.success(
                     "License action applied successfully",
@@ -57,7 +64,7 @@ public class LicenseController {
                         toStringList(request.get("modules")),
                         toInteger(request.get("maxUsers")),
                         toText(request.get("reason")),
-                        toText(request.get("upgradedBy"))));
+                        firstNonBlank(toText(request.get("upgradedBy")), currentUserId)));
                 }
 
     @GetMapping("/tenant/{tenantId}/history")
@@ -85,5 +92,15 @@ public class LicenseController {
 
     private String toText(Object value) {
         return value == null ? null : String.valueOf(value);
+    }
+
+    private String firstNonBlank(String primary, String fallback) {
+        if (primary != null && !primary.isBlank()) {
+            return primary;
+        }
+        if (fallback != null && !fallback.isBlank()) {
+            return fallback;
+        }
+        return null;
     }
 }

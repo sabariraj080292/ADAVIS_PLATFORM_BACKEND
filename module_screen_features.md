@@ -19,6 +19,7 @@ Master Data Management [e.g Module]
         4.1 Manage Departments
     5. User, Role & Groups Management
         5.1 Manage Users
+        5.1 Tag Users to Plant & roles
         5.2 Manage Roles
         5.3 Manage Role Permissions
         5.4 Manage User Groups

@@ -195,7 +195,7 @@ var collectionOptions = {
         validator: {
             $jsonSchema: {
                 bsonType: 'object',
-                required: ['userId', 'userTrackId', 'tenantId', 'firstName', 'lastName', 'isActive', 'isBlocked', 'isExternal'],
+                required: ['userId', 'userTrackId', 'tenantId', 'firstName', 'lastName', 'email', 'isActive', 'isBlocked', 'isExternal'],
                 properties: {
                     userId: { bsonType: 'string' },
                     userTrackId: { bsonType: 'string' },
@@ -2073,7 +2073,6 @@ upsertOne('mdm_role_permissions', { roleId: superAdminRoleId, moduleId: 'MOD-000
 
 upsertOne('mdm_licenses', { tenantId: 'TNT-0001' }, {
     tenantId: 'TNT-0001',
-    licenseKey: 'LIC-ADAVIS-TNT-0001-2026',
     plan: {
         planId: 'PLAN_ENTERPRISE',
         planName: 'Enterprise',

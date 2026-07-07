@@ -28,17 +28,19 @@ $runArgs = @{
 if ($BuildFirst) {
     $runArgs.BuildFirst = $true
 }
-if ($SkipSeed) {
-    $runArgs.SkipSeed = $true
-}
-if ($NoReset) {
-    $runArgs.NoReset = $true
-}
 if ($ForceRestart) {
     $runArgs.ForceRestart = $true
 }
 if (@($SkipServices).Count -gt 0) {
     $runArgs.SkipServices = $SkipServices
+}
+
+if (-not $SkipSeed) {
+    $seedArgs = @{}
+    if ($NoReset) {
+        $seedArgs.NoReset = $true
+    }
+    & (Join-Path $PSScriptRoot "seed-data.ps1") @seedArgs
 }
 
 & (Join-Path $PSScriptRoot "run-local.ps1") @runArgs

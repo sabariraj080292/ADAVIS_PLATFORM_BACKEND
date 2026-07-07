@@ -1,5 +1,6 @@
 package com.adavis.audit.model.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -28,6 +29,7 @@ public class AuditLog {
     private String userId;
 
     @Indexed
+    @JsonIgnore
     private String username;
 
     @Indexed
@@ -39,6 +41,7 @@ public class AuditLog {
     private Map<String, Object> before;
     private Map<String, Object> after;
 
+    @JsonIgnore
     private Map<String, Object> metadata; // Additional context
 
     private String ipAddress;

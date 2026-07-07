@@ -32,24 +32,33 @@ public class JwtService {
     }
 
     public String generateAccessToken(String userId, String username, List<String> roles) {
-        return generateToken(userId, username, roles, expirationMs);
+        return generateAccessToken(userId, username, roles, null);
+    }
+
+    public String generateAccessToken(String userId, String username, List<String> roles, String sessionId) {
+        return generateToken(userId, username, roles, sessionId, expirationMs);
     }
 
     public String generateRefreshToken(String userId, String username) {
-        return generateToken(userId, username, null, refreshExpirationMs);
+        return generateToken(userId, username, null, null, refreshExpirationMs);
     }
 
-    private String generateToken(String userId, String username, List<String> roles, long expirationMs) {
+    private String generateToken(String userId, String username, List<String> roles, String sessionId, long expirationMs) {
         Instant now = Instant.now();
-        return Jwts.builder()
+        var builder = Jwts.builder()
                 .id(UUID.randomUUID().toString())
                 .subject(userId)
                 .claim("username", username)
                 .claim("roles", roles != null ? roles : List.of())
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusMillis(expirationMs)))
-                .signWith(key)
-                .compact();
+                .signWith(key);
+
+        if (sessionId != null && !sessionId.isBlank()) {
+            builder.claim("sessionId", sessionId);
+        }
+
+        return builder.compact();
     }
 
     public String extractUserId(String token) {
@@ -74,6 +83,14 @@ public class JwtService {
             return parseToken(token).get("roles", List.class);
         } catch (Exception e) {
             return List.of();
+        }
+    }
+
+    public String extractSessionId(String token) {
+        try {
+            return parseToken(token).get("sessionId", String.class);
+        } catch (Exception e) {
+            return null;
         }
     }
 

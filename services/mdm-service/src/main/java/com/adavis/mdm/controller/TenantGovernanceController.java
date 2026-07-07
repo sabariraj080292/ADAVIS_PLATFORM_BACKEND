@@ -26,6 +26,7 @@ import java.util.Map;
 public class TenantGovernanceController {
 
     private static final String INTERNAL_AUTH_HEADER = "X-Internal-Auth";
+    private static final String USER_ID_HEADER = "X-User-Id";
 
     private final PlantTopologyService plantTopologyService;
     private final InternalRequestValidator internalRequestValidator;
@@ -33,10 +34,11 @@ public class TenantGovernanceController {
     @PostMapping("/tenants")
     public ResponseEntity<ApiResponse<Map<String, Object>>> createTenant(
             @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth,
+            @RequestHeader(value = USER_ID_HEADER, required = false) String currentUserId,
             @RequestBody Map<String, Object> request) {
         internalRequestValidator.validateInternalGatewayRequest(internalAuth);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Tenant created successfully", plantTopologyService.createTenant(request)));
+                .body(ApiResponse.success("Tenant created successfully", plantTopologyService.createTenant(request, currentUserId)));
     }
 
     @GetMapping("/tenants")
@@ -54,35 +56,39 @@ public class TenantGovernanceController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> updateTenant(
             @PathVariable String tenantId,
             @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth,
+            @RequestHeader(value = USER_ID_HEADER, required = false) String currentUserId,
             @RequestBody Map<String, Object> request) {
         internalRequestValidator.validateInternalGatewayRequest(internalAuth);
-        return ResponseEntity.ok(ApiResponse.success("Tenant updated successfully", plantTopologyService.updateTenant(tenantId, request)));
+        return ResponseEntity.ok(ApiResponse.success("Tenant updated successfully", plantTopologyService.updateTenant(tenantId, request, currentUserId)));
     }
 
     @DeleteMapping("/tenants/{tenantId}")
     public ResponseEntity<ApiResponse<Void>> deleteTenant(
             @PathVariable String tenantId,
-            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth) {
+            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth,
+            @RequestHeader(value = USER_ID_HEADER, required = false) String currentUserId) {
         internalRequestValidator.validateInternalGatewayRequest(internalAuth);
-        plantTopologyService.deleteTenant(tenantId);
+        plantTopologyService.deleteTenant(tenantId, currentUserId);
         return ResponseEntity.ok(ApiResponse.successMessage("Tenant deleted successfully"));
     }
 
     @PostMapping("/tenants/{tenantId}/deactivate")
     public ResponseEntity<ApiResponse<Void>> deactivateTenant(
             @PathVariable String tenantId,
-            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth) {
+            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth,
+            @RequestHeader(value = USER_ID_HEADER, required = false) String currentUserId) {
         internalRequestValidator.validateInternalGatewayRequest(internalAuth);
-        plantTopologyService.deleteTenant(tenantId);
+        plantTopologyService.deleteTenant(tenantId, currentUserId);
         return ResponseEntity.ok(ApiResponse.successMessage("Tenant deactivated successfully"));
     }
 
     @PostMapping("/tenants/{tenantId}/activate")
     public ResponseEntity<ApiResponse<Map<String, Object>>> reactivateTenant(
             @PathVariable String tenantId,
-            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth) {
+            @RequestHeader(value = INTERNAL_AUTH_HEADER, required = false) String internalAuth,
+            @RequestHeader(value = USER_ID_HEADER, required = false) String currentUserId) {
         internalRequestValidator.validateInternalGatewayRequest(internalAuth);
-        return ResponseEntity.ok(ApiResponse.success("Tenant reactivated successfully", plantTopologyService.reactivateTenant(tenantId)));
+        return ResponseEntity.ok(ApiResponse.success("Tenant reactivated successfully", plantTopologyService.reactivateTenant(tenantId, currentUserId)));
     }
 
 }

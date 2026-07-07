@@ -70,6 +70,7 @@ public class UserController {
     @GetMapping("/{userId}")
     public ResponseEntity<ApiResponse<UserProfile>> getUser(@PathVariable String userId) {
         UserProfile user = userService.getUserByUserId(userId);
+        user.setUsername(null);
         return ResponseEntity.ok(ApiResponse.success(user));
     }
 

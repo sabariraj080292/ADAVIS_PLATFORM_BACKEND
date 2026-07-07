@@ -82,9 +82,10 @@ public class JwtAuthenticationFilter implements GatewayFilter, Ordered {
                     // Extract user info and add to headers
                     String userId = jwtTokenProvider.getUserIdFromToken(token);
                     String username = jwtTokenProvider.getUsernameFromToken(token);
+                    String sessionId = jwtTokenProvider.getSessionIdFromToken(token);
 
                     if (isLicenseBypassPath(path) || SUPER_ADMIN_USER_ID.equalsIgnoreCase(userId)) {
-                        ServerHttpRequest bypassRequest = buildTrustedRequestHeaders(request, userId, username, null);
+                        ServerHttpRequest bypassRequest = buildTrustedRequestHeaders(request, userId, username, sessionId, null);
                         log.info("Gateway bypassing license check for path={} userId={}", path, userId);
                         return chain.filter(exchange.mutate().request(bypassRequest).build());
                     }
@@ -95,7 +96,7 @@ public class JwtAuthenticationFilter implements GatewayFilter, Ordered {
                                         if (!valid) {
                                             return licenseExpired(exchange.getResponse());
                                         }
-                                        ServerHttpRequest mutatedRequest = buildTrustedRequestHeaders(request, userId, username, tenantId);
+                                        ServerHttpRequest mutatedRequest = buildTrustedRequestHeaders(request, userId, username, sessionId, tenantId);
                                         log.info("Authenticated user: {} for path: {} tenantId={}", username, path, tenantId);
                                         return chain.filter(exchange.mutate().request(mutatedRequest).build());
                                     }))
@@ -132,6 +133,7 @@ public class JwtAuthenticationFilter implements GatewayFilter, Ordered {
     private ServerHttpRequest buildTrustedRequestHeaders(ServerHttpRequest request,
                                                          String userId,
                                                          String username,
+                                                         String sessionId,
                                                          String tenantId) {
         return request.mutate()
             .headers(headers -> {
@@ -139,9 +141,13 @@ public class JwtAuthenticationFilter implements GatewayFilter, Ordered {
                 headers.remove("X-User-Id");
                 headers.remove("X-Username");
                 headers.remove("X-Tenant-Id");
+                headers.remove("X-Session-Id");
                 headers.remove("X-Internal-Auth");
                 headers.add("X-User-Id", userId);
                 headers.add("X-Username", username);
+                if (StringUtils.hasText(sessionId)) {
+                    headers.add("X-Session-Id", sessionId);
+                }
                 headers.add("X-Internal-Auth", internalAuthHeaderValue);
                 if (StringUtils.hasText(tenantId)) {
                     headers.add("X-Tenant-Id", tenantId);

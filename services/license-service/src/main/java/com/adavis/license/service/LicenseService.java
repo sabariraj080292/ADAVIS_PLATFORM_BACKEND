@@ -222,6 +222,7 @@ public class LicenseService {
         Instant oldExpiry = license.getExpiryDate();
 
         Map<String, Object> planClaims = tokenClaims != null ? safeMap(tokenClaims.get("plan")) : Collections.emptyMap();
+        String upgradedLicenseKey = tokenClaims != null ? stringClaim(tokenClaims.get("licenseKey")) : null;
         String effectivePlanId = stringClaim(planClaims.get("planId"));
         String effectivePlanName = stringClaim(planClaims.get("planName"));
         String effectivePlanType = stringClaim(planClaims.get("planType"));
@@ -245,6 +246,10 @@ public class LicenseService {
         }
 
         // Apply upgrades
+        if (upgradedLicenseKey != null && !upgradedLicenseKey.isBlank()) {
+            license.setLicenseKey(upgradedLicenseKey);
+        }
+
         if (effectivePlanId != null || effectivePlanName != null || effectivePlanType != null || effectiveFeatures != null) {
             if (license.getPlan() == null) {
                 license.setPlan(License.Plan.builder().build());
@@ -400,7 +405,7 @@ public class LicenseService {
     public ModuleResponse getModulesByTenantId(String tenantId) {
         License license = getActiveLicenseEntityByTenantId(tenantId);
         return ModuleResponse.builder()
-            .licenseKey(null)
+            .licenseKey(license.getLicenseKey())
             .modules(license.getModules())
             .status(license.getStatus())
             .build();
@@ -533,7 +538,7 @@ public class LicenseService {
     private LicenseResponse mapToResponse(License license) {
         return LicenseResponse.builder()
                 .id(license.getId())
-                .licenseKey(null)
+                .licenseKey(license.getLicenseKey())
                 .planId(license.getPlan() != null ? license.getPlan().getPlanId() : null)
                 .planName(license.getPlan() != null ? license.getPlan().getPlanName() : null)
                 .planType(license.getPlan() != null ? license.getPlan().getPlanType() : null)

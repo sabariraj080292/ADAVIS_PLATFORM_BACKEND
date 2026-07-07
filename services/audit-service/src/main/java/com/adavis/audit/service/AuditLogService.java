@@ -12,14 +12,25 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuditLogService {
+
+    private static final Set<String> SESSION_METADATA_KEYS = Set.of(
+        "tenantId", "ipAddress", "userAgent", "isActive", "deviceInfo"
+    );
+
+    private static final Set<String> SENSITIVE_KEY_HINTS = Set.of(
+        "token", "password", "secret", "credential", "authorization"
+    );
 
     private final AuditLogRepository auditLogRepository;
     private final ObjectMapper objectMapper;
@@ -29,20 +40,31 @@ public class AuditLogService {
         log.info("Logging audit event: action={}, user={}, entity={}", 
                 event.getAction(), event.getUserId(), event.getEntity());
 
+        Map<String, Object> metadata = event.getMetadata() == null
+            ? new LinkedHashMap<>()
+            : new LinkedHashMap<>(event.getMetadata());
+
+        String tenantId = firstNonBlank(event.getTenantId(), asString(metadata.remove("tenantId")));
+        String ipAddress = firstNonBlank(event.getIpAddress(), asString(metadata.remove("ipAddress")));
+        String sessionId = firstNonBlank(event.getSessionId(), asString(metadata.remove("sessionId")));
+        String userAgent = firstNonBlank(event.getUserAgent(), asString(metadata.remove("userAgent")));
+
+        metadata = sanitizeMetadata(event.getEntity(), metadata);
+
         AuditLog auditLog = AuditLog.builder()
                 .id(UUID.randomUUID().toString())
                 .userId(event.getUserId())
-                .username(event.getUsername())
+            .username(null)
                 .action(event.getAction())
                 .entity(event.getEntity())
                 .entityId(event.getEntityId())
                 .before(event.getBefore())
                 .after(event.getAfter())
-                .metadata(event.getMetadata())
-                .ipAddress(event.getIpAddress())
-                .sessionId(event.getSessionId())
-                .userAgent(event.getUserAgent())
-                .tenantId(event.getTenantId())
+            .metadata(metadata.isEmpty() ? null : metadata)
+            .ipAddress(ipAddress)
+            .sessionId(sessionId)
+            .userAgent(userAgent)
+            .tenantId(tenantId)
                 .status(event.getStatus() != null ? event.getStatus() : "SUCCESS")
                 .failureReason(event.getFailureReason())
                 .timestamp(event.getTimestamp() != null ? event.getTimestamp() : Instant.now())
@@ -124,5 +146,51 @@ public class AuditLogService {
                 .build();
 
         return logEvent(event);
+    }
+
+    private String asString(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private String firstNonBlank(String primary, String fallback) {
+        if (primary != null && !primary.isBlank()) {
+            return primary;
+        }
+        if (fallback != null && !fallback.isBlank()) {
+            return fallback;
+        }
+        return null;
+    }
+
+    private Map<String, Object> sanitizeMetadata(String entity, Map<String, Object> metadata) {
+        if (metadata == null || metadata.isEmpty()) {
+            return metadata;
+        }
+
+        Map<String, Object> sanitized = new LinkedHashMap<>();
+        Set<String> allowList = "AUTH_SESSION".equalsIgnoreCase(entity)
+                ? new HashSet<>(SESSION_METADATA_KEYS)
+                : null;
+
+        for (Map.Entry<String, Object> entry : metadata.entrySet()) {
+            String key = entry.getKey();
+            if (key == null) {
+                continue;
+            }
+
+            String normalized = key.toLowerCase();
+            boolean sensitive = SENSITIVE_KEY_HINTS.stream().anyMatch(normalized::contains);
+            if (sensitive) {
+                continue;
+            }
+
+            if (allowList != null && !allowList.contains(key)) {
+                continue;
+            }
+
+            sanitized.put(key, entry.getValue());
+        }
+
+        return sanitized;
     }
 }

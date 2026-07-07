@@ -195,7 +195,7 @@ var collectionOptions = {
         validator: {
             $jsonSchema: {
                 bsonType: 'object',
-                required: ['userId', 'userTrackId', 'tenantId', 'firstName', 'lastName', 'isActive', 'isBlocked', 'isExternal'],
+                required: ['userId', 'userTrackId', 'tenantId', 'firstName', 'lastName', 'email', 'isActive', 'isBlocked'],
                 properties: {
                     userId: { bsonType: 'string' },
                     userTrackId: { bsonType: 'string' },
@@ -205,8 +205,7 @@ var collectionOptions = {
                     email: { bsonType: 'string' },
                     phoneNumber: { bsonType: 'string' },
                     isActive: { bsonType: 'bool' },
-                    isBlocked: { bsonType: 'bool' },
-                    isExternal: { bsonType: 'bool' }
+                    isBlocked: { bsonType: 'bool' }
                 }
             }
         }
@@ -218,6 +217,7 @@ var collectionOptions = {
                 required: ['userId', 'status', 'isLocked', 'failedAttempts'],
                 properties: {
                     userId: { bsonType: 'string' },
+                    username: { bsonType: 'string' },
                     email: { bsonType: 'string' },
                     status: { bsonType: 'string' },
                     isLocked: { bsonType: 'bool' },
@@ -1040,20 +1040,9 @@ ensureIndex('id_sequence_mappings', { collectionName: 1, fieldName: 1 }, { uniqu
 
 logInfo('Seeding default data...');
 
-var manufacturingBlockId = ObjectId('648c71b2a3b4e21a2c3d9101');
-var warehouseBlockId = ObjectId('648c71b2a3b4e21a2c3d9102');
-var utilityBlockId = ObjectId('648c71b2a3b4e21a2c3d9103');
-var qualityControlBlockId = ObjectId('648c71b2a3b4e21a2c3d9104');
-
-var dispensingAreaId = ObjectId('648c71b2a3b4e21a2c3d9201');
-var compressionAreaId = ObjectId('648c71b2a3b4e21a2c3d9202');
-var packingAreaId = ObjectId('648c71b2a3b4e21a2c3d9203');
-var rawMaterialAreaId = ObjectId('648c71b2a3b4e21a2c3d9204');
-var finishedGoodsAreaId = ObjectId('648c71b2a3b4e21a2c3d9205');
-var purifiedWaterAreaId = ObjectId('648c71b2a3b4e21a2c3d9206');
-var hvacAreaId = ObjectId('648c71b2a3b4e21a2c3d9207');
-var chemicalTestingAreaId = ObjectId('648c71b2a3b4e21a2c3d9208');
-var microbiologyAreaId = ObjectId('648c71b2a3b4e21a2c3d9209');
+var blockId = ObjectId('648c71b2a3b4e21a2c3d9101');
+var areaId = ObjectId('648c71b2a3b4e21a2c3d9102');
+var roomId = ObjectId('648c71b2a3b4e21a2c3d9103');
 var assetObjectId = ObjectId('648c71b2a3b4e21a2c3d8001');
 var tagObjectId = ObjectId('648c71b2a3b4e21a2c3d8002');
 
@@ -1088,7 +1077,7 @@ db.mdm_plants.updateOne(
     {
         $set: {
             tenantId: 'TNT-0001',
-            plantName: 'Adavis Formulation Plant - Hyderabad',
+            plantName: 'NovaCrest Formulation Plant - Hyderabad',
             plantCode: 'HYD-01',
             type: 'Manufacturing',
             address: {
@@ -1103,6 +1092,7 @@ db.mdm_plants.updateOne(
             updatedAt: ISODate()
         },
         $setOnInsert: {
+            _description: 'Maps physical manufacturing sites and facilities isolated by geographical location and localized regulatory mandates.',
             createdAt: ISODate('2026-01-15T08:00:00Z')
         }
     },
@@ -1119,7 +1109,7 @@ db.mdm_plants.updateOne(
     {
         $set: {
             tenantId: 'TNT-0001',
-            plantName: 'Adavis API Plant - Visakhapatnam',
+            plantName: 'NovaCrest API Plant - Visakhapatnam',
             plantCode: 'VZG-01',
             type: 'Manufacturing',
             address: {
@@ -1134,6 +1124,7 @@ db.mdm_plants.updateOne(
             updatedAt: ISODate()
         },
         $setOnInsert: {
+            _description: 'Maps physical manufacturing sites and facilities isolated by geographical location and localized regulatory mandates.',
             createdAt: ISODate('2026-01-15T08:00:00Z')
         }
     },
@@ -1147,8 +1138,8 @@ upsertManyWithAutoId('mdm_departments', [
         departmentId: 'DEP-0001',
         tenantId: 'TNT-0001',
         plantId: 'PLNT-0001',
-        departmentCode: 'PLT-OPS',
-        departmentName: 'Plant Operations',
+        departmentCode: 'PROD',
+        departmentName: 'Production',
         level: 1,
         parentDepartmentId: null,
         path: 'DEP-0001',
@@ -1158,172 +1149,17 @@ upsertManyWithAutoId('mdm_departments', [
         departmentId: 'DEP-0002',
         tenantId: 'TNT-0001',
         plantId: 'PLNT-0001',
-        departmentCode: 'PROD',
-        departmentName: 'Production',
-        level: 2,
-        parentDepartmentId: 'DEP-0001',
-        path: 'DEP-0001/DEP-0002',
-        isActive: true
-    },
-    {
-        departmentId: 'DEP-0003',
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        departmentCode: 'WH',
-        departmentName: 'Warehouse',
-        level: 2,
-        parentDepartmentId: 'DEP-0001',
-        path: 'DEP-0001/DEP-0003',
-        isActive: true
-    },
-    {
-        departmentId: 'DEP-0004',
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        departmentCode: 'SCM',
-        departmentName: 'Supply Chain',
-        level: 2,
-        parentDepartmentId: 'DEP-0001',
-        path: 'DEP-0001/DEP-0004',
-        isActive: true
-    },
-    {
-        departmentId: 'DEP-0005',
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        departmentCode: 'QUAL',
-        departmentName: 'Quality Systems',
-        level: 1,
-        parentDepartmentId: null,
-        path: 'DEP-0005',
-        isActive: true
-    },
-    {
-        departmentId: 'DEP-0006',
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        departmentCode: 'QA',
-        departmentName: 'Quality Assurance',
-        level: 2,
-        parentDepartmentId: 'DEP-0005',
-        path: 'DEP-0005/DEP-0006',
-        isActive: true
-    },
-    {
-        departmentId: 'DEP-0007',
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        departmentCode: 'QC',
-        departmentName: 'Quality Control',
-        level: 2,
-        parentDepartmentId: 'DEP-0005',
-        path: 'DEP-0005/DEP-0007',
-        isActive: true
-    },
-    {
-        departmentId: 'DEP-0008',
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        departmentCode: 'COMP',
-        departmentName: 'Compliance',
-        level: 2,
-        parentDepartmentId: 'DEP-0005',
-        path: 'DEP-0005/DEP-0008',
-        isActive: true
-    },
-    {
-        departmentId: 'DEP-0009',
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        departmentCode: 'DOC',
-        departmentName: 'Document Control',
-        level: 2,
-        parentDepartmentId: 'DEP-0005',
-        path: 'DEP-0005/DEP-0009',
-        isActive: true
-    },
-    {
-        departmentId: 'DEP-0010',
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        departmentCode: 'TECH',
-        departmentName: 'Technical Services',
-        level: 1,
-        parentDepartmentId: null,
-        path: 'DEP-0010',
-        isActive: true
-    },
-    {
-        departmentId: 'DEP-0011',
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        departmentCode: 'MNT',
-        departmentName: 'Maintenance',
-        level: 2,
-        parentDepartmentId: 'DEP-0010',
-        path: 'DEP-0010/DEP-0011',
-        isActive: true
-    },
-    {
-        departmentId: 'DEP-0012',
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
         departmentCode: 'UTIL',
         departmentName: 'Utilities',
         level: 2,
-        parentDepartmentId: 'DEP-0010',
-        path: 'DEP-0010/DEP-0012',
-        isActive: true
-    },
-    {
-        departmentId: 'DEP-0013',
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        departmentCode: 'AUTO',
-        departmentName: 'Automation / Instrumentation',
-        level: 2,
-        parentDepartmentId: 'DEP-0010',
-        path: 'DEP-0010/DEP-0013',
-        isActive: true
-    },
-    {
-        departmentId: 'DEP-0014',
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        departmentCode: 'DIGI',
-        departmentName: 'Digital & Governance',
-        level: 1,
-        parentDepartmentId: null,
-        path: 'DEP-0014',
-        isActive: true
-    },
-    {
-        departmentId: 'DEP-0015',
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        departmentCode: 'IT',
-        departmentName: 'Information Technology',
-        level: 2,
-        parentDepartmentId: 'DEP-0014',
-        path: 'DEP-0014/DEP-0015',
-        isActive: true
-    },
-    {
-        departmentId: 'DEP-0016',
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        departmentCode: 'MDM',
-        departmentName: 'Master Data Management',
-        level: 2,
-        parentDepartmentId: 'DEP-0014',
-        path: 'DEP-0014/DEP-0016',
+        parentDepartmentId: 'DEP-0001',
+        path: 'DEP-0001/DEP-0002',
         isActive: true
     }
 ], 'departmentId', { sequenceName: 'departmentId', prefix: 'DEP', padLength: 4 });
 
 upsertMany('mdm_blocks', [
     {
-        blockId: manufacturingBlockId,
         tenantId: 'TNT-0001',
         plantId: 'PLNT-0001',
         blockCode: 'BLK-MFG',
@@ -1332,122 +1168,31 @@ upsertMany('mdm_blocks', [
         isActive: true
     },
     {
-        blockId: warehouseBlockId,
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        blockCode: 'BLK-WH',
-        blockName: 'Warehouse Block',
-        displayOrder: 2,
-        isActive: true
-    },
-    {
-        blockId: utilityBlockId,
         tenantId: 'TNT-0001',
         plantId: 'PLNT-0001',
         blockCode: 'BLK-UTIL',
         blockName: 'Utility Block',
-        displayOrder: 3,
-        isActive: true
-    },
-    {
-        blockId: qualityControlBlockId,
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        blockCode: 'BLK-QC',
-        blockName: 'Quality Control Block',
-        displayOrder: 4,
+        displayOrder: 2,
         isActive: true
     }
 ], 'blockCode');
 
 upsertMany('mdm_areas', [
     {
-        areaId: dispensingAreaId,
         tenantId: 'TNT-0001',
         plantId: 'PLNT-0001',
-        blockId: manufacturingBlockId,
-        areaCode: 'AREA-DISP',
-        areaName: 'Dispensing Area',
-        displayOrder: 1,
-        isActive: true
-    },
-    {
-        areaId: compressionAreaId,
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        blockId: manufacturingBlockId,
+        blockId: blockId,
         areaCode: 'AREA-COMP',
         areaName: 'Compression Area',
-        displayOrder: 2,
-        isActive: true
-    },
-    {
-        areaId: packingAreaId,
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        blockId: manufacturingBlockId,
-        areaCode: 'AREA-PACK',
-        areaName: 'Packing Area',
-        displayOrder: 3,
-        isActive: true
-    },
-    {
-        areaId: rawMaterialAreaId,
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        blockId: warehouseBlockId,
-        areaCode: 'AREA-RM',
-        areaName: 'Raw Material Area',
         displayOrder: 1,
         isActive: true
     },
     {
-        areaId: finishedGoodsAreaId,
         tenantId: 'TNT-0001',
         plantId: 'PLNT-0001',
-        blockId: warehouseBlockId,
-        areaCode: 'AREA-FG',
-        areaName: 'Finished Goods Area',
-        displayOrder: 2,
-        isActive: true
-    },
-    {
-        areaId: purifiedWaterAreaId,
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        blockId: utilityBlockId,
+        blockId: blockId,
         areaCode: 'AREA-PW',
         areaName: 'Purified Water Area',
-        displayOrder: 1,
-        isActive: true
-    },
-    {
-        areaId: hvacAreaId,
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        blockId: utilityBlockId,
-        areaCode: 'AREA-HVAC',
-        areaName: 'HVAC Area',
-        displayOrder: 2,
-        isActive: true
-    },
-    {
-        areaId: chemicalTestingAreaId,
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        blockId: qualityControlBlockId,
-        areaCode: 'AREA-CHEM',
-        areaName: 'Chemical Testing Area',
-        displayOrder: 1,
-        isActive: true
-    },
-    {
-        areaId: microbiologyAreaId,
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        blockId: qualityControlBlockId,
-        areaCode: 'AREA-MICRO',
-        areaName: 'Microbiology Area',
         displayOrder: 2,
         isActive: true
     }
@@ -1458,7 +1203,7 @@ upsertManyWithAutoId('mdm_rooms', [
         roomId: 'ROOM-0001',
         tenantId: 'TNT-0001',
         plantId: 'PLNT-0001',
-        areaId: compressionAreaId,
+        areaId: areaId,
         roomCode: 'RM-COMP-101',
         roomName: 'Compression Room 101',
         classification: 'ISO_7',
@@ -1468,160 +1213,10 @@ upsertManyWithAutoId('mdm_rooms', [
         roomId: 'ROOM-0002',
         tenantId: 'TNT-0001',
         plantId: 'PLNT-0001',
-        areaId: purifiedWaterAreaId,
+        areaId: areaId,
         roomCode: 'RM-PW-201',
         roomName: 'Purified Water Plant Room',
         classification: 'CNC',
-        isActive: true
-    },
-    {
-        roomId: 'ROOM-0003',
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        areaId: dispensingAreaId,
-        roomCode: 'RM-DISP-01',
-        roomName: 'Dispensing Room 01',
-        classification: 'ISO_8',
-        isActive: true
-    },
-    {
-        roomId: 'ROOM-0004',
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        areaId: dispensingAreaId,
-        roomCode: 'RM-MATL-AIRLOCK',
-        roomName: 'Material Airlock',
-        classification: 'CNC',
-        isActive: true
-    },
-    {
-        roomId: 'ROOM-0005',
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        areaId: compressionAreaId,
-        roomCode: 'RM-COMP-102',
-        roomName: 'Compression Room 102',
-        classification: 'ISO_7',
-        isActive: true
-    },
-    {
-        roomId: 'ROOM-0006',
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        areaId: packingAreaId,
-        roomCode: 'RM-PACK-PRI',
-        roomName: 'Primary Packing Room',
-        classification: 'ISO_8',
-        isActive: true
-    },
-    {
-        roomId: 'ROOM-0007',
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        areaId: packingAreaId,
-        roomCode: 'RM-PACK-SEC',
-        roomName: 'Secondary Packing Room',
-        classification: 'CNC',
-        isActive: true
-    },
-    {
-        roomId: 'ROOM-0008',
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        areaId: rawMaterialAreaId,
-        roomCode: 'RM-RM-STORE',
-        roomName: 'Raw Material Store',
-        classification: 'WAREHOUSE',
-        isActive: true
-    },
-    {
-        roomId: 'ROOM-0009',
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        areaId: rawMaterialAreaId,
-        roomCode: 'RM-SAMPLING',
-        roomName: 'Sampling Room',
-        classification: 'ISO_8',
-        isActive: true
-    },
-    {
-        roomId: 'ROOM-0010',
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        areaId: finishedGoodsAreaId,
-        roomCode: 'RM-FG-STAGE',
-        roomName: 'FG Staging Room',
-        classification: 'WAREHOUSE',
-        isActive: true
-    },
-    {
-        roomId: 'ROOM-0011',
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        areaId: finishedGoodsAreaId,
-        roomCode: 'RM-DISPATCH',
-        roomName: 'Dispatch Holding Room',
-        classification: 'WAREHOUSE',
-        isActive: true
-    },
-    {
-        roomId: 'ROOM-0012',
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        areaId: purifiedWaterAreaId,
-        roomCode: 'RM-PW-GEN',
-        roomName: 'PW Generation Room',
-        classification: 'UTILITY',
-        isActive: true
-    },
-    {
-        roomId: 'ROOM-0013',
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        areaId: hvacAreaId,
-        roomCode: 'RM-AHU',
-        roomName: 'AHU Room',
-        classification: 'UTILITY',
-        isActive: true
-    },
-    {
-        roomId: 'ROOM-0014',
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        areaId: chemicalTestingAreaId,
-        roomCode: 'RM-HPLC',
-        roomName: 'HPLC Room',
-        classification: 'LAB',
-        isActive: true
-    },
-    {
-        roomId: 'ROOM-0015',
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        areaId: chemicalTestingAreaId,
-        roomCode: 'RM-WETLAB',
-        roomName: 'Wet Lab',
-        classification: 'LAB',
-        isActive: true
-    },
-    {
-        roomId: 'ROOM-0016',
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        areaId: microbiologyAreaId,
-        roomCode: 'RM-MICRO',
-        roomName: 'Micro Lab',
-        classification: 'LAB',
-        isActive: true
-    },
-    {
-        roomId: 'ROOM-0017',
-        tenantId: 'TNT-0001',
-        plantId: 'PLNT-0001',
-        areaId: microbiologyAreaId,
-        roomCode: 'RM-INCUB',
-        roomName: 'Incubation Room',
-        classification: 'LAB',
         isActive: true
     }
 ], 'roomId', { sequenceName: 'roomId', prefix: 'ROOM', padLength: 4 });
@@ -1645,10 +1240,10 @@ db.mdm_user_profiles.updateOne(
             empId: 'EMP-00001',
             isActive: true,
             isBlocked: false,
-            isExternal: false,
             updatedAt: ISODate()
         },
         $setOnInsert: {
+            _description: 'Primary identity records for system users containing master personal, contact, and HR parameters.',
             createdAt: ISODate('2026-03-01T10:00:00Z')
         }
     },
@@ -1664,6 +1259,7 @@ db.auth_users.updateOne(
             status: 'ACTIVE',
             isLocked: false,
             failedAttempts: 0,
+            isDeleted: false,
             updatedAt: ISODate()
         },
         $setOnInsert: {
@@ -1688,14 +1284,15 @@ db.mdm_user_profiles.updateOne(
             phoneNumber: '+91-9000000002',
             title: 'IT Administrator',
             userType: 'INTERNAL_EMPLOYEE',
+            lifecycleStatus: 'ACTIVE',
             email: 'it_admin@adavis.com',
             empId: 'EMP-00002',
             isActive: true,
             isBlocked: false,
-            isExternal: false,
             updatedAt: ISODate()
         },
         $setOnInsert: {
+            _description: 'Primary identity records for system users containing master personal, contact, and HR parameters.',
             createdAt: ISODate('2026-03-01T10:00:00Z')
         }
     },
@@ -1711,6 +1308,7 @@ db.auth_users.updateOne(
             status: 'ACTIVE',
             isLocked: false,
             failedAttempts: 0,
+            isDeleted: false,
             updatedAt: ISODate()
         },
         $setOnInsert: {
@@ -1730,11 +1328,12 @@ db.mdm_user_auth_credentials.updateOne(
         $set: {
             email: 'super_admin@adavis.com',
             passwordHash: DEFAULT_ADAVIS_PASSWORD_HASH,
-            mustChangePassword: false,
+            mustChangePassword: true,
             passwordUpdatedAt: ISODate(),
             updatedAt: ISODate()
         },
         $setOnInsert: {
+            _description: 'Isolates secure password crypts and administrative first-login tracking metrics away from public profile directories.',
             createdAt: ISODate('2026-03-01T10:05:00Z')
         }
     },
@@ -1751,11 +1350,12 @@ db.mdm_user_auth_credentials.updateOne(
         $set: {
             email: 'it_admin@adavis.com',
             passwordHash: DEFAULT_ADAVIS_PASSWORD_HASH,
-            mustChangePassword: false,
+            mustChangePassword: true,
             passwordUpdatedAt: ISODate(),
             updatedAt: ISODate()
         },
         $setOnInsert: {
+            _description: 'Isolates secure password crypts and administrative first-login tracking metrics away from public profile directories.',
             createdAt: ISODate('2026-03-01T10:05:00Z')
         }
     },
@@ -1769,6 +1369,7 @@ var roleSeed = [
         roleName: 'Platform Super Administrator',
         roleCode: 'SUPER_ADMIN',
         isActive: true,
+        _description: 'Defines functional job role definitions that act as anchors for pooling permission matrix assignments.',
         createdAt: ISODate('2026-01-20T10:30:00Z')
     },
     {
@@ -1777,110 +1378,7 @@ var roleSeed = [
         roleName: 'IT Administrator',
         roleCode: 'IT_ADMIN',
         isActive: true,
-        createdAt: ISODate('2026-01-20T10:30:00Z')
-    },
-    {
-        roleId: 'ROLE-0003',
-        tenantId: 'TNT-0001',
-        roleName: 'Plant Administrator',
-        roleCode: 'PLANT_ADMIN',
-        isActive: true,
-        createdAt: ISODate('2026-01-20T10:30:00Z')
-    },
-    {
-        roleId: 'ROLE-0004',
-        tenantId: 'TNT-0001',
-        roleName: 'Master Data Steward',
-        roleCode: 'MASTER_DATA_STEWARD',
-        isActive: true,
-        createdAt: ISODate('2026-01-20T10:30:00Z')
-    },
-    {
-        roleId: 'ROLE-0005',
-        tenantId: 'TNT-0001',
-        roleName: 'QA Manager',
-        roleCode: 'QA_MANAGER',
-        isActive: true,
-        createdAt: ISODate('2026-01-20T10:30:00Z')
-    },
-    {
-        roleId: 'ROLE-0006',
-        tenantId: 'TNT-0001',
-        roleName: 'QC Manager',
-        roleCode: 'QC_MANAGER',
-        isActive: true,
-        createdAt: ISODate('2026-01-20T10:30:00Z')
-    },
-    {
-        roleId: 'ROLE-0007',
-        tenantId: 'TNT-0001',
-        roleName: 'Compliance Officer',
-        roleCode: 'COMPLIANCE_OFFICER',
-        isActive: true,
-        createdAt: ISODate('2026-01-20T10:30:00Z')
-    },
-    {
-        roleId: 'ROLE-0008',
-        tenantId: 'TNT-0001',
-        roleName: 'Production Operator',
-        roleCode: 'PRODUCTION_OPERATOR',
-        isActive: true,
-        createdAt: ISODate('2026-01-20T10:30:00Z')
-    },
-    {
-        roleId: 'ROLE-0009',
-        tenantId: 'TNT-0001',
-        roleName: 'Shift Supervisor',
-        roleCode: 'SHIFT_SUPERVISOR',
-        isActive: true,
-        createdAt: ISODate('2026-01-20T10:30:00Z')
-    },
-    {
-        roleId: 'ROLE-0010',
-        tenantId: 'TNT-0001',
-        roleName: 'Maintenance Technician',
-        roleCode: 'MAINTENANCE_TECHNICIAN',
-        isActive: true,
-        createdAt: ISODate('2026-01-20T10:30:00Z')
-    },
-    {
-        roleId: 'ROLE-0011',
-        tenantId: 'TNT-0001',
-        roleName: 'Automation Engineer',
-        roleCode: 'AUTOMATION_ENGINEER',
-        isActive: true,
-        createdAt: ISODate('2026-01-20T10:30:00Z')
-    },
-    {
-        roleId: 'ROLE-0012',
-        tenantId: 'TNT-0001',
-        roleName: 'Utilities Engineer',
-        roleCode: 'UTILITIES_ENGINEER',
-        isActive: true,
-        createdAt: ISODate('2026-01-20T10:30:00Z')
-    },
-    {
-        roleId: 'ROLE-0013',
-        tenantId: 'TNT-0001',
-        roleName: 'Supply Chain Manager',
-        roleCode: 'SUPPLY_CHAIN_MANAGER',
-        isActive: true,
-        createdAt: ISODate('2026-01-20T10:30:00Z')
-    },
-    {
-        roleId: 'ROLE-0014',
-        tenantId: 'TNT-0001',
-        roleName: 'Document Controller',
-        roleCode: 'DOCUMENT_CONTROLLER',
-        isActive: true,
-        createdAt: ISODate('2026-01-20T10:30:00Z')
-    },
-    {
-        roleId: 'ROLE-0015',
-        tenantId: 'TNT-0001',
-        roleName: 'IIOT Administrator',
-        roleCode: 'IIOT_ADMIN',
-        isActive: true,
+        _description: 'Defines functional job role definitions that act as anchors for pooling permission matrix assignments.',
         createdAt: ISODate('2026-01-20T10:30:00Z')
     }
 ];
@@ -1898,6 +1396,7 @@ var groupSeed = [
         groupName: 'Platform Administrators',
         groupCode: 'PLATFORM_ADMIN',
         isActive: true,
+        _description: 'Defines security access groups that act as containers to bundle multiple functional application roles for easier user mapping.',
         createdAt: ISODate('2026-01-20T11:00:00Z')
     },
     {
@@ -1906,70 +1405,7 @@ var groupSeed = [
         groupName: 'IT Administrators',
         groupCode: 'IT_ADMIN',
         isActive: true,
-        createdAt: ISODate('2026-01-20T11:00:00Z')
-    },
-    {
-        groupId: 'GRP-0003',
-        tenantId: 'TNT-0001',
-        groupName: 'Plant Administration',
-        groupCode: 'PLANT_ADMIN',
-        isActive: true,
-        createdAt: ISODate('2026-01-20T11:00:00Z')
-    },
-    {
-        groupId: 'GRP-0004',
-        tenantId: 'TNT-0001',
-        groupName: 'MDM Governance',
-        groupCode: 'MDM_GOVERNANCE',
-        isActive: true,
-        createdAt: ISODate('2026-01-20T11:00:00Z')
-    },
-    {
-        groupId: 'GRP-0005',
-        tenantId: 'TNT-0001',
-        groupName: 'Quality and Compliance',
-        groupCode: 'QUALITY_COMPLIANCE',
-        isActive: true,
-        createdAt: ISODate('2026-01-20T11:00:00Z')
-    },
-    {
-        groupId: 'GRP-0006',
-        tenantId: 'TNT-0001',
-        groupName: 'Production Operations',
-        groupCode: 'PRODUCTION_OPERATIONS',
-        isActive: true,
-        createdAt: ISODate('2026-01-20T11:00:00Z')
-    },
-    {
-        groupId: 'GRP-0007',
-        tenantId: 'TNT-0001',
-        groupName: 'Maintenance and Engineering',
-        groupCode: 'MAINTENANCE_ENGINEERING',
-        isActive: true,
-        createdAt: ISODate('2026-01-20T11:00:00Z')
-    },
-    {
-        groupId: 'GRP-0008',
-        tenantId: 'TNT-0001',
-        groupName: 'Supply Chain Operations',
-        groupCode: 'SUPPLY_CHAIN',
-        isActive: true,
-        createdAt: ISODate('2026-01-20T11:00:00Z')
-    },
-    {
-        groupId: 'GRP-0009',
-        tenantId: 'TNT-0001',
-        groupName: 'Document Control',
-        groupCode: 'DOCUMENT_CONTROL',
-        isActive: true,
-        createdAt: ISODate('2026-01-20T11:00:00Z')
-    },
-    {
-        groupId: 'GRP-0010',
-        tenantId: 'TNT-0001',
-        groupName: 'IIOT Operations',
-        groupCode: 'IIOT_OPERATIONS',
-        isActive: true,
+        _description: 'Defines security access groups that act as containers to bundle multiple functional application roles for easier user mapping.',
         createdAt: ISODate('2026-01-20T11:00:00Z')
     }
 ];
@@ -1990,8 +1426,8 @@ var screenSeed = [
     { screenId: 'SCR-0002', moduleId: 'MOD-0001', moduleCode: 'MOD-MDM', screenCode: 'SCR-MDM-TENANT-LICENSE', screenName: 'Tenant & License Governance', displayOrder: 2, isActive: true },
     { screenId: 'SCR-0003', moduleId: 'MOD-0001', moduleCode: 'MOD-MDM', screenCode: 'SCR-MDM-PLANT-TOPOLOGY', screenName: 'Plant Topology', displayOrder: 3, isActive: true },
     { screenId: 'SCR-0004', moduleId: 'MOD-0001', moduleCode: 'MOD-MDM', screenCode: 'SCR-MDM-DEPARTMENT', screenName: 'Department', displayOrder: 4, isActive: true },
-    { screenId: 'SCR-0005', moduleId: 'MOD-0001', moduleCode: 'MOD-MDM', screenCode: 'SCR-MDM-USER-ROLE-GROUPS', screenName: 'User, Role & Access Management', displayOrder: 5, isActive: true },
-    { screenId: 'SCR-0006', moduleId: 'MOD-0001', moduleCode: 'MOD-MDM', screenCode: 'SCR-MDM-IIOT-MASTER', screenName: 'Equipment & Critical Parameter Master Data', displayOrder: 6, isActive: true },
+    { screenId: 'SCR-0005', moduleId: 'MOD-0001', moduleCode: 'MOD-MDM', screenCode: 'SCR-MDM-USER-ROLE-GROUPS', screenName: 'User, Role & Groups Management', displayOrder: 5, isActive: true },
+    { screenId: 'SCR-0006', moduleId: 'MOD-0001', moduleCode: 'MOD-MDM', screenCode: 'SCR-MDM-IIOT-MASTER', screenName: 'IIOT Master Data Management', displayOrder: 6, isActive: true },
     { screenId: 'SCR-0007', moduleId: 'MOD-0001', moduleCode: 'MOD-MDM', screenCode: 'SCR-MDM-AUDIT-REPORTING', screenName: 'Audit & Reporting', displayOrder: 7, isActive: true },
     { screenId: 'SCR-0008', moduleId: 'MOD-0002', moduleCode: 'MOD-IIOT', screenCode: 'SCR-IIOT-EQUIPMENT-OVERVIEW', screenName: 'Equipment Overview', displayOrder: 1, isActive: true },
     { screenId: 'SCR-0009', moduleId: 'MOD-0002', moduleCode: 'MOD-IIOT', screenCode: 'SCR-IIOT-MONITORING-CONSOLE', screenName: 'Monitoring Console', displayOrder: 2, isActive: true },
@@ -2011,10 +1447,11 @@ var featureSeed = [
     { featureId: 'FEAT-0009', moduleId: 'MOD-0001', moduleCode: 'MOD-MDM', screenId: 'SCR-0005', screenCode: 'SCR-MDM-USER-ROLE-GROUPS', featureCode: 'FEAT-MDM-MANAGE-USERS', featureName: 'Manage Users', displayOrder: 1, isActive: true },
     { featureId: 'FEAT-0010', moduleId: 'MOD-0001', moduleCode: 'MOD-MDM', screenId: 'SCR-0005', screenCode: 'SCR-MDM-USER-ROLE-GROUPS', featureCode: 'FEAT-MDM-MANAGE-ROLES', featureName: 'Manage Roles', displayOrder: 2, isActive: true },
     { featureId: 'FEAT-0011', moduleId: 'MOD-0001', moduleCode: 'MOD-MDM', screenId: 'SCR-0005', screenCode: 'SCR-MDM-USER-ROLE-GROUPS', featureCode: 'FEAT-MDM-MANAGE-ROLE-PERMISSIONS', featureName: 'Manage Role Permissions', displayOrder: 3, isActive: true },
-    { featureId: 'FEAT-0012', moduleId: 'MOD-0001', moduleCode: 'MOD-MDM', screenId: 'SCR-0005', screenCode: 'SCR-MDM-USER-ROLE-GROUPS', featureCode: 'FEAT-MDM-TAG-USERS-TO-PLANTS-AND-ROLES', featureName: 'Tag Users to Plants & Roles', displayOrder: 4, isActive: true },
-    { featureId: 'FEAT-0014', moduleId: 'MOD-0001', moduleCode: 'MOD-MDM', screenId: 'SCR-0006', screenCode: 'SCR-MDM-IIOT-MASTER', featureCode: 'FEAT-MDM-MANAGE-EQUIPMENT', featureName: 'Manage Equipment', displayOrder: 1, isActive: true },
-    { featureId: 'FEAT-0015', moduleId: 'MOD-0001', moduleCode: 'MOD-MDM', screenId: 'SCR-0006', screenCode: 'SCR-MDM-IIOT-MASTER', featureCode: 'FEAT-MDM-MANAGE-EQUIPMENT-CRITICAL-PARAMETERS', featureName: 'Manage Equipment Critical Parameters', displayOrder: 2, isActive: true },
-    { featureId: 'FEAT-0016', moduleId: 'MOD-0001', moduleCode: 'MOD-MDM', screenId: 'SCR-0006', screenCode: 'SCR-MDM-IIOT-MASTER', featureCode: 'FEAT-MDM-MANAGE-EQUIPMENT-CRITICAL-PARAMETER-LIMITS', featureName: 'Manage Equipment Critical Parameter Limits', displayOrder: 3, isActive: true },
+    { featureId: 'FEAT-0012', moduleId: 'MOD-0001', moduleCode: 'MOD-MDM', screenId: 'SCR-0005', screenCode: 'SCR-MDM-USER-ROLE-GROUPS', featureCode: 'FEAT-MDM-MANAGE-USER-GROUPS', featureName: 'Manage User Groups', displayOrder: 4, isActive: true },
+    { featureId: 'FEAT-0013', moduleId: 'MOD-0001', moduleCode: 'MOD-MDM', screenId: 'SCR-0005', screenCode: 'SCR-MDM-USER-ROLE-GROUPS', featureCode: 'FEAT-MDM-MANAGE-ROLE-GROUP-ASSIGNMENTS', featureName: 'Manage Role Assignments to Groups', displayOrder: 5, isActive: true },
+    { featureId: 'FEAT-0014', moduleId: 'MOD-0001', moduleCode: 'MOD-MDM', screenId: 'SCR-0006', screenCode: 'SCR-MDM-IIOT-MASTER', featureCode: 'FEAT-MDM-MANAGE-ASSETS', featureName: 'Manage Assets', displayOrder: 1, isActive: true },
+    { featureId: 'FEAT-0015', moduleId: 'MOD-0001', moduleCode: 'MOD-MDM', screenId: 'SCR-0006', screenCode: 'SCR-MDM-IIOT-MASTER', featureCode: 'FEAT-MDM-MANAGE-ASSET-TAGS', featureName: 'Manage Assets Tags', displayOrder: 2, isActive: true },
+    { featureId: 'FEAT-0016', moduleId: 'MOD-0001', moduleCode: 'MOD-MDM', screenId: 'SCR-0006', screenCode: 'SCR-MDM-IIOT-MASTER', featureCode: 'FEAT-MDM-MANAGE-ASSET-THRESHOLDS', featureName: 'Manage Asset Thresholds', displayOrder: 3, isActive: true },
     { featureId: 'FEAT-0017', moduleId: 'MOD-0001', moduleCode: 'MOD-MDM', screenId: 'SCR-0007', screenCode: 'SCR-MDM-AUDIT-REPORTING', featureCode: 'FEAT-MDM-AUDIT-LOGS', featureName: 'Audit Logs', displayOrder: 1, isActive: true },
     { featureId: 'FEAT-0018', moduleId: 'MOD-0001', moduleCode: 'MOD-MDM', screenId: 'SCR-0007', screenCode: 'SCR-MDM-AUDIT-REPORTING', featureCode: 'FEAT-MDM-REPORTS', featureName: 'Reports', displayOrder: 2, isActive: true },
     { featureId: 'FEAT-0019', moduleId: 'MOD-0002', moduleCode: 'MOD-IIOT', screenId: 'SCR-0008', screenCode: 'SCR-IIOT-EQUIPMENT-OVERVIEW', featureCode: 'FEAT-IIOT-EQUIPMENT-HEALTH-STATUS-PERFORMANCE-TREND', featureName: 'Equipment Health, Status & Performance Trend', displayOrder: 1, isActive: true },
@@ -2030,23 +1467,6 @@ upsertOne('mdm_role_assignments_to_user_groups', { groupId: platformAdminGroupId
     assignedAt: ISODate('2026-03-01T10:10:00Z'),
     assignedBy: 'SYSTEM'
 });
-
-upsertMany('mdm_role_assignments_to_user_groups', [
-    { groupId: 'GRP-0002', roleId: 'ROLE-0002', isActive: true, assignedAt: ISODate('2026-03-01T10:10:00Z'), assignedBy: 'SYSTEM' },
-    { groupId: 'GRP-0003', roleId: 'ROLE-0003', isActive: true, assignedAt: ISODate('2026-03-01T10:10:00Z'), assignedBy: 'SYSTEM' },
-    { groupId: 'GRP-0004', roleId: 'ROLE-0004', isActive: true, assignedAt: ISODate('2026-03-01T10:10:00Z'), assignedBy: 'SYSTEM' },
-    { groupId: 'GRP-0005', roleId: 'ROLE-0005', isActive: true, assignedAt: ISODate('2026-03-01T10:10:00Z'), assignedBy: 'SYSTEM' },
-    { groupId: 'GRP-0005', roleId: 'ROLE-0006', isActive: true, assignedAt: ISODate('2026-03-01T10:10:00Z'), assignedBy: 'SYSTEM' },
-    { groupId: 'GRP-0005', roleId: 'ROLE-0007', isActive: true, assignedAt: ISODate('2026-03-01T10:10:00Z'), assignedBy: 'SYSTEM' },
-    { groupId: 'GRP-0006', roleId: 'ROLE-0008', isActive: true, assignedAt: ISODate('2026-03-01T10:10:00Z'), assignedBy: 'SYSTEM' },
-    { groupId: 'GRP-0006', roleId: 'ROLE-0009', isActive: true, assignedAt: ISODate('2026-03-01T10:10:00Z'), assignedBy: 'SYSTEM' },
-    { groupId: 'GRP-0007', roleId: 'ROLE-0010', isActive: true, assignedAt: ISODate('2026-03-01T10:10:00Z'), assignedBy: 'SYSTEM' },
-    { groupId: 'GRP-0007', roleId: 'ROLE-0011', isActive: true, assignedAt: ISODate('2026-03-01T10:10:00Z'), assignedBy: 'SYSTEM' },
-    { groupId: 'GRP-0007', roleId: 'ROLE-0012', isActive: true, assignedAt: ISODate('2026-03-01T10:10:00Z'), assignedBy: 'SYSTEM' },
-    { groupId: 'GRP-0008', roleId: 'ROLE-0013', isActive: true, assignedAt: ISODate('2026-03-01T10:10:00Z'), assignedBy: 'SYSTEM' },
-    { groupId: 'GRP-0009', roleId: 'ROLE-0014', isActive: true, assignedAt: ISODate('2026-03-01T10:10:00Z'), assignedBy: 'SYSTEM' },
-    { groupId: 'GRP-0010', roleId: 'ROLE-0015', isActive: true, assignedAt: ISODate('2026-03-01T10:10:00Z'), assignedBy: 'SYSTEM' }
-], 'roleId');
 
 upsertOne('mdm_user_assignments_to_user_groups', { userId: 'SUPER_ADMIN', groupId: platformAdminGroupId }, {
     userId: 'SUPER_ADMIN',
@@ -2070,10 +1490,53 @@ upsertOne('mdm_role_permissions', { roleId: superAdminRoleId, moduleId: 'MOD-000
     buildRolePermissionDocument('TNT-0001', superAdminRoleId, 'MOD-0001', screenSeed, featureSeed)
 );
 
+upsertOne('iiot_assets', { tenantId: 'TNT-0001', assetCode: 'RMG_100L_P7_2' }, {
+    _id: assetObjectId,
+    assetId: 'EQP-RMG-0042',
+    tenantId: 'TNT-0001',
+    plantId: 'PLNT-0001',
+    roomId: roomId,
+    assetCode: 'RMG_100L_P7_2',
+    assetName: 'Rapid Mixer Granulator 100L',
+    assetType: 'EQUIPMENT',
+    category: 'PROCESS',
+    isActive: true
+});
+
+upsertOne('iiot_asset_tags', { tenantId: 'TNT-0001', assetCode: 'RMG_100L_P7_2', tagCode: 'IMPELLER_A' }, {
+    _id: tagObjectId,
+    tagId: 'TAG-000512',
+    tenantId: 'TNT-0001',
+    assetId: assetObjectId,
+    assetCode: 'RMG_100L_P7_2',
+    tagCode: 'IMPELLER_A',
+    tagName: 'Main Impeller Amperage Draw',
+    dataType: 'Float',
+    unitOfMeasure: 'Amperes',
+    sampleIntervalMs: 1000,
+    gxpImpact: true,
+    isActive: true
+});
+
+upsertOne('iiot_tag_thresholds', { thresholdId: 'THR-001042' }, {
+    thresholdId: 'THR-001042',
+    tenantId: 'TNT-0001',
+    plantId: 'PLNT-0001',
+    assetId: assetObjectId,
+    tagId: tagObjectId,
+    tagCode: 'IMPELLER_A',
+    condition: 'GREATER_THAN',
+    warningThreshold: 55,
+    criticalThreshold: 65,
+    targetValue: 45,
+    validatedMethodSopCode: 'SOP-VAL-0991',
+    isActive: true
+});
 
 upsertOne('mdm_licenses', { tenantId: 'TNT-0001' }, {
     tenantId: 'TNT-0001',
-    licenseKey: 'LIC-ADAVIS-TNT-0001-2026',
+    licenseId: 'LIC-0001',
+    licenseKey: 'TNT-0001',
     plan: {
         planId: 'PLAN_ENTERPRISE',
         planName: 'Enterprise',
@@ -2099,11 +1562,11 @@ logInfo('Initializing auto-increment ID sequences...');
 var sequenceDefinitions = [
     { sequenceName: 'tenantId', collectionName: 'mdm_tenants', fieldName: 'tenantId', prefix: 'TNT', padLength: 4, seedValues: ['TNT-0001'] },
     { sequenceName: 'plantId', collectionName: 'mdm_plants', fieldName: 'plantId', prefix: 'PLNT', padLength: 4, seedValues: ['PLNT-0001', 'PLNT-0002'] },
-    { sequenceName: 'departmentId', collectionName: 'mdm_departments', fieldName: 'departmentId', prefix: 'DEP', padLength: 4, seedValues: ['DEP-0001', 'DEP-0002', 'DEP-0003', 'DEP-0004', 'DEP-0005', 'DEP-0006', 'DEP-0007', 'DEP-0008', 'DEP-0009', 'DEP-0010', 'DEP-0011', 'DEP-0012', 'DEP-0013', 'DEP-0014', 'DEP-0015', 'DEP-0016'] },
-    { sequenceName: 'roomId', collectionName: 'mdm_rooms', fieldName: 'roomId', prefix: 'ROOM', padLength: 4, seedValues: ['ROOM-0001', 'ROOM-0002', 'ROOM-0003', 'ROOM-0004', 'ROOM-0005', 'ROOM-0006', 'ROOM-0007', 'ROOM-0008', 'ROOM-0009', 'ROOM-0010', 'ROOM-0011', 'ROOM-0012', 'ROOM-0013', 'ROOM-0014', 'ROOM-0015', 'ROOM-0016', 'ROOM-0017'] },
+    { sequenceName: 'departmentId', collectionName: 'mdm_departments', fieldName: 'departmentId', prefix: 'DEP', padLength: 4, seedValues: ['DEP-0001', 'DEP-0002'] },
+    { sequenceName: 'roomId', collectionName: 'mdm_rooms', fieldName: 'roomId', prefix: 'ROOM', padLength: 4, seedValues: ['ROOM-0001', 'ROOM-0002'] },
     { sequenceName: 'userTrackId', collectionName: 'mdm_user_profiles', fieldName: 'userTrackId', prefix: 'USR', padLength: 4, seedValues: ['USR-0001', 'USR-0002'] },
-    { sequenceName: 'groupId', collectionName: 'mdm_user_groups', fieldName: 'groupId', prefix: 'GRP', padLength: 4, seedValues: ['GRP-0001', 'GRP-0002', 'GRP-0003', 'GRP-0004', 'GRP-0005', 'GRP-0006', 'GRP-0007', 'GRP-0008', 'GRP-0009', 'GRP-0010'] },
-    { sequenceName: 'roleId', collectionName: 'mdm_roles', fieldName: 'roleId', prefix: 'ROLE', padLength: 4, seedValues: ['ROLE-0001', 'ROLE-0002', 'ROLE-0003', 'ROLE-0004', 'ROLE-0005', 'ROLE-0006', 'ROLE-0007', 'ROLE-0008', 'ROLE-0009', 'ROLE-0010', 'ROLE-0011', 'ROLE-0012', 'ROLE-0013', 'ROLE-0014', 'ROLE-0015'] },
+    { sequenceName: 'groupId', collectionName: 'mdm_user_groups', fieldName: 'groupId', prefix: 'GRP', padLength: 4, seedValues: ['GRP-0001', 'GRP-0002'] },
+    { sequenceName: 'roleId', collectionName: 'mdm_roles', fieldName: 'roleId', prefix: 'ROLE', padLength: 4, seedValues: ['ROLE-0001', 'ROLE-0002'] },
     { sequenceName: 'moduleId', collectionName: 'mdm_modules', fieldName: 'moduleId', prefix: 'MOD', padLength: 4, seedValues: ['MOD-0001', 'MOD-0002', 'MOD-0003'] },
     { sequenceName: 'screenId', collectionName: 'mdm_screens', fieldName: 'screenId', prefix: 'SCR', padLength: 4, seedValues: ['SCR-0001', 'SCR-0002', 'SCR-0003', 'SCR-0004', 'SCR-0005', 'SCR-0006', 'SCR-0007', 'SCR-0008', 'SCR-0009', 'SCR-0010'] },
     { sequenceName: 'featureId', collectionName: 'mdm_features', fieldName: 'featureId', prefix: 'FEAT', padLength: 4, seedValues: ['FEAT-0001', 'FEAT-0002', 'FEAT-0003', 'FEAT-0004', 'FEAT-0005', 'FEAT-0006', 'FEAT-0007', 'FEAT-0008', 'FEAT-0009', 'FEAT-0010', 'FEAT-0011', 'FEAT-0012', 'FEAT-0013', 'FEAT-0014', 'FEAT-0015', 'FEAT-0016', 'FEAT-0017', 'FEAT-0018', 'FEAT-0019', 'FEAT-0020', 'FEAT-0021'] },

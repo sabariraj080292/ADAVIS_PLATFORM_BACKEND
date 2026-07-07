@@ -61,6 +61,7 @@ public class UserService {
 
     private static final String USER_ASSIGNMENTS_COLLECTION = "mdm_user_context_assignments";
     private static final String PLANTS_COLLECTION = "mdm_plants";
+    private static final String DEPARTMENTS_COLLECTION = "mdm_departments";
 
     private final UserProfileRepository userProfileRepository;
     private final DmsDocumentRepository dmsDocumentRepository;
@@ -144,15 +145,12 @@ public class UserService {
             throw new BusinessException("User track ID already exists: " + userProfile.getUserTrackId(), "DUPLICATE_USER_TRACK_ID");
         }
 
-        if (userProfile.getEmail() == null || userProfile.getEmail().isBlank()) {
-            throw new BusinessException("Email is required", "EMAIL_REQUIRED");
-        }
-
-        if (userProfileRepository.findByEmail(userProfile.getEmail()).isPresent()) {
+        if (StringUtils.hasText(userProfile.getEmail())
+                && userProfileRepository.findByEmail(userProfile.getEmail()).isPresent()) {
             throw new BusinessException("Email already exists: " + userProfile.getEmail(), "DUPLICATE_EMAIL");
         }
 
-        // Backfill username for create payloads that only send userId/email.
+        // Backfill username for create payloads that omit it.
         if (userProfile.getUsername() == null || userProfile.getUsername().isBlank()) {
             userProfile.setUsername(deriveUsername(userProfile.getEmail(), userProfile.getUserId()));
         }
@@ -171,6 +169,9 @@ public class UserService {
         }
         if (userProfile.getIsBlocked() == null) {
             userProfile.setIsBlocked(false);
+        }
+        if (userProfile.getIsExternal() == null) {
+            userProfile.setIsExternal(false);
         }
 
         normalizeUserFields(userProfile);
@@ -266,6 +267,39 @@ public class UserService {
             .distinct()
             .toList();
 
+        Map<String, Set<String>> departmentIdsByPlantId = new LinkedHashMap<>();
+        for (Document assignment : assignments) {
+            String assignmentPlantId = extractPlantIdFromAssignment(assignment);
+            String departmentId = stringValue(assignment.get("departmentId"));
+            if (!StringUtils.hasText(assignmentPlantId) || !StringUtils.hasText(departmentId)) {
+                continue;
+            }
+            departmentIdsByPlantId
+                .computeIfAbsent(assignmentPlantId, ignored -> new LinkedHashSet<>())
+                .add(departmentId);
+        }
+
+        Set<String> allDepartmentIds = departmentIdsByPlantId.values().stream()
+            .flatMap(Set::stream)
+            .filter(StringUtils::hasText)
+            .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+
+        Map<String, Map<String, Object>> departmentsById = new HashMap<>();
+        if (!allDepartmentIds.isEmpty()) {
+            Query departmentQuery = new Query(Criteria.where("departmentId").in(allDepartmentIds)
+                .and("isActive").is(true));
+            List<Map<String, Object>> departmentNodes = mongoTemplate.find(departmentQuery, Document.class, DEPARTMENTS_COLLECTION).stream()
+                .map(this::toMap)
+                .map(this::toCompactDepartment)
+                .toList();
+            for (Map<String, Object> departmentNode : departmentNodes) {
+                String departmentId = stringValue(departmentNode.get("departmentId"));
+                if (StringUtils.hasText(departmentId)) {
+                    departmentsById.put(departmentId, departmentNode);
+                }
+            }
+        }
+
         List<Map<String, Object>> assignedPlants = List.of();
         if (!assignedPlantIds.isEmpty()) {
             Query plantQuery = new Query(Criteria.where("plantId").in(assignedPlantIds)
@@ -273,6 +307,10 @@ public class UserService {
             plantQuery.with(Sort.by(Sort.Direction.ASC, "plantCode", "plantId"));
             assignedPlants = mongoTemplate.find(plantQuery, Document.class, PLANTS_COLLECTION).stream()
                 .map(this::toMap)
+                .map(plant -> toCompactPlantWithDepartments(
+                    plant,
+                    departmentIdsByPlantId.getOrDefault(stringValue(plant.get("plantId")), Set.of()),
+                    departmentsById))
                 .toList();
         }
 
@@ -285,14 +323,41 @@ public class UserService {
             .findFirst()
             .orElse(null);
 
+        Map<String, Object> userSummary = new LinkedHashMap<>();
+        userSummary.put("userId", user.getUserId());
+        userSummary.put("userTrackId", user.getUserTrackId());
+        userSummary.put("tenantId", user.getTenantId());
+        userSummary.put("email", user.getEmail());
+        userSummary.put("firstName", user.getFirstName());
+        userSummary.put("lastName", user.getLastName());
+        userSummary.put("phoneNumber", user.getPhoneNumber());
+        userSummary.put("title", user.getTitle());
+        userSummary.put("userType", user.getUserType());
+        userSummary.put("isExternal", user.getIsExternal());
+        userSummary.put("isActive", user.getIsActive());
+        userSummary.put("isBlocked", user.getIsBlocked());
+        Map<String, Object> lockStatus = resolveLoginLockStatus(user.getUserId(), Boolean.TRUE.equals(user.getIsBlocked()));
+        userSummary.put("isLocked", lockStatus.get("isLocked"));
+        userSummary.put("failedAttempts", lockStatus.get("failedAttempts"));
+        userSummary.put("empId", user.getEmpId());
+        userSummary.put("designation", user.getDesignation());
+
+        List<Map<String, Object>> compactGroups = groups.stream()
+            .map(this::toCompactGroup)
+            .toList();
+
+        List<Map<String, Object>> compactRoles = roles.stream()
+            .map(this::toCompactRole)
+            .toList();
+
+        Map<String, Object> compactRolePermissions = toCompactRolePermissions(rolePermissions);
+
         Map<String, Object> context = new HashMap<>();
-        context.put("user", user);
+        context.put("user", userSummary);
         context.put("tenantId", tenantId);
-        context.put("groupAssignments", activeGroupAssignments);
-        context.put("groups", groups);
-        context.put("roles", roles);
-        context.put("rolePermissions", rolePermissions);
-        context.put("assignedPlantIds", assignedPlantIds);
+        context.put("groups", compactGroups);
+        context.put("roles", compactRoles);
+        context.put("rolePermissions", compactRolePermissions);
         context.put("assignedPlants", assignedPlants);
         context.put("plantSelectionRequired", assignedPlants.size() > 1);
         context.put("selectedPlantId", selectedPlantId);
@@ -405,14 +470,17 @@ public class UserService {
     public void deleteUser(String userId) {
         UserProfile user = getUserByUserId(userId);
         String tenantId = user.getTenantId();
+        Map<String, Object> before = userLifecycleSnapshot(user);
         user.setIsActive(false);
         user.setIsBlocked(true);
         user.setLifecycleStatus("DELETED");
         user.setUpdatedAt(Instant.now());
-        userProfileRepository.save(user);
+        UserProfile saved = userProfileRepository.save(user);
         syncLicenseUserCount(tenantId);
-        auditEventPublisher.publish(user.getUserId(), "USER_DELETED", "MDM_USER", user.getUserId(), "SUCCESS",
-            Map.of("tenantId", user.getTenantId() == null ? "" : user.getTenantId()));
+        auditEventPublisher.publish(saved.getUserId(), "USER_DELETED", "MDM_USER", saved.getUserId(), "SUCCESS",
+            before,
+            userLifecycleSnapshot(saved),
+            Map.of("tenantId", saved.getTenantId() == null ? "" : saved.getTenantId()));
         log.info("Soft deleted user: {}", userId);
     }
 
@@ -435,27 +503,27 @@ public class UserService {
 
         String normalizedAction = action.trim().toLowerCase(Locale.ROOT);
         UserProfile user = getUserByUserId(userId);
+        Map<String, Object> before = userLifecycleSnapshot(user);
 
         switch (normalizedAction) {
             case "activate", "reactivate" -> {
                 user.setIsActive(true);
-                user.setLifecycleStatus("ACTIVE");
+                user.setIsBlocked(false);
+                user.setLifecycleStatus(deriveLifecycleStatus(user));
             }
             case "deactivate" -> {
                 user.setIsActive(false);
-                user.setLifecycleStatus("DEACTIVATED");
+                user.setLifecycleStatus(deriveLifecycleStatus(user));
             }
             case "block" -> {
+                user.setIsActive(false);
                 user.setIsBlocked(true);
-                user.setLifecycleStatus("BLOCKED");
+                user.setLifecycleStatus(deriveLifecycleStatus(user));
             }
             case "unblock" -> {
                 user.setIsBlocked(false);
-                if (Boolean.TRUE.equals(user.getIsActive())) {
-                    user.setLifecycleStatus("ACTIVE");
-                } else {
-                    user.setLifecycleStatus("DEACTIVATED");
-                }
+                user.setIsActive(true);
+                user.setLifecycleStatus(deriveLifecycleStatus(user));
             }
             default -> throw new BusinessException("Unsupported lifecycle action: " + action, "INVALID_LIFECYCLE_ACTION");
         }
@@ -476,7 +544,10 @@ public class UserService {
                 firstNonBlank(reason, "Lifecycle action " + normalizedAction));
 
         auditEventPublisher.publish(saved.getUserId(), "USER_LIFECYCLE_UPDATED", "MDM_USER", saved.getUserId(),
-            "SUCCESS", Map.of(
+            "SUCCESS",
+            before,
+            userLifecycleSnapshot(saved),
+            Map.of(
                 "tenantId", saved.getTenantId() == null ? "" : saved.getTenantId(),
                 "action", normalizedAction));
         return saved;
@@ -502,11 +573,9 @@ public class UserService {
                             ensureItAdminCanCreateUser(itAdminUserId, user.getTenantId());
         String resolvedEmail = StringUtils.hasText(email) ? email : user.getEmail();
 
-        if (!StringUtils.hasText(resolvedEmail)) {
-            throw new BusinessException("Email is required to reset password", "EMAIL_REQUIRED");
-        }
-
-        if (StringUtils.hasText(user.getEmail()) && !user.getEmail().equalsIgnoreCase(resolvedEmail)) {
+        if (StringUtils.hasText(email)
+                && StringUtils.hasText(user.getEmail())
+                && !user.getEmail().equalsIgnoreCase(email)) {
             throw new BusinessException("Email does not match user", "EMAIL_MISMATCH");
         }
 
@@ -570,13 +639,12 @@ public class UserService {
 
         String lifecycleStatus = StringUtils.hasText(user.getLifecycleStatus())
             ? user.getLifecycleStatus().trim().toUpperCase(Locale.ROOT)
-            : (Boolean.TRUE.equals(user.getIsBlocked()) ? "BLOCKED"
-                : (Boolean.TRUE.equals(user.getIsActive()) ? "ACTIVE" : "DEACTIVATED"));
+            : deriveLifecycleStatus(user);
 
         Map<String, Object> payload = new HashMap<>();
         payload.put("userId", user.getUserId());
         payload.put("status", lifecycleStatus);
-        payload.put("isLocked", Boolean.TRUE.equals(user.getIsBlocked()));
+        payload.put("isLocked", isUserLocked(user));
 
         try {
             restTemplate.postForEntity(url, new HttpEntity<>(payload, headers), Map.class);
@@ -682,7 +750,7 @@ public class UserService {
             + userProfileRepository.countByTenantIdAndIsActiveTrueAndIsBlockedFalse(tenantId);
 
         try {
-            restTemplate.patchForObject(url, null, Map.class);
+            restTemplate.postForEntity(url, null, Map.class);
         } catch (RestClientException ex) {
             log.warn("Failed to sync license user count for tenantId {}: {}", tenantId, ex.getMessage());
         }
@@ -924,8 +992,11 @@ public class UserService {
 
             String documentId = rawDocumentId.trim();
             DmsDocument doc = dmsDocumentRepository.findByDocumentId(documentId)
-                    .orElseThrow(() -> new BusinessException("Supporting document not found: " + documentId,
-                            "SUPPORTING_DOCUMENT_NOT_FOUND"));
+                    .orElse(null);
+            if (doc == null) {
+                log.warn("Skipping missing supporting document {} for tenant {}", documentId, tenantId);
+                continue;
+            }
 
             if (StringUtils.hasText(tenantId) && !tenantId.equals(doc.getTenantId())) {
                 throw new BusinessException("Supporting document tenant mismatch for document: " + documentId,
@@ -1012,6 +1083,41 @@ public class UserService {
             }
         }
         return userId;
+    }
+
+    private Map<String, Object> userLifecycleSnapshot(UserProfile user) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        if (user == null) {
+            return snapshot;
+        }
+        snapshot.put("userId", user.getUserId());
+        snapshot.put("tenantId", user.getTenantId());
+        snapshot.put("isActive", user.getIsActive());
+        snapshot.put("isBlocked", user.getIsBlocked());
+        snapshot.put("isLocked", isUserLocked(user));
+        snapshot.put("lifecycleStatus", deriveLifecycleStatus(user));
+        snapshot.put("departmentId", user.getDepartmentId());
+        return snapshot;
+    }
+
+    private String deriveLifecycleStatus(UserProfile user) {
+        if (user == null) {
+            return null;
+        }
+        if (isUserLocked(user)) {
+            return "BLOCKED";
+        }
+        if (Boolean.TRUE.equals(user.getIsActive())) {
+            return "ACTIVE";
+        }
+        return "DEACTIVATED";
+    }
+
+    private boolean isUserLocked(UserProfile user) {
+        if (user == null) {
+            return false;
+        }
+        return Boolean.TRUE.equals(user.getIsBlocked()) || !Boolean.TRUE.equals(user.getIsActive());
     }
 
     private String extractPlantIdFromAssignment(Document assignment) {
@@ -1135,7 +1241,7 @@ public class UserService {
                     }
 
                     screenActionUnion.addAll(featureActions);
-                    Map<String, Object> visibleFeature = new LinkedHashMap<>(featureNode);
+                    Map<String, Object> visibleFeature = toCompactFeature(featureNode);
                     visibleFeature.put("actions", new ArrayList<>(featureActions));
                     visibleFeatures.add(visibleFeature);
                 }
@@ -1152,7 +1258,7 @@ public class UserService {
                     }
                 }
 
-                Map<String, Object> visibleScreen = new LinkedHashMap<>(screenNode);
+                Map<String, Object> visibleScreen = toCompactScreen(screenNode);
                 visibleScreen.put("features", visibleFeatures);
                 visibleScreen.put("actions", fullAccess ? new ArrayList<>(actionCatalog) : new ArrayList<>(screenActionUnion));
                 visibleScreens.add(visibleScreen);
@@ -1162,7 +1268,7 @@ public class UserService {
                 continue;
             }
 
-            Map<String, Object> visibleModule = new LinkedHashMap<>(moduleNode);
+            Map<String, Object> visibleModule = toCompactModule(moduleNode);
             visibleModule.put("screens", visibleScreens);
             visibleModule.put("actions", fullAccess ? new ArrayList<>(actionCatalog) : List.of());
             visibleModules.add(visibleModule);
@@ -1174,6 +1280,191 @@ public class UserService {
         permissionMatrix.put("licensedModules", new ArrayList<>(licensedModules));
         permissionMatrix.put("isAdminDefaultGrant", isAdmin);
         return permissionMatrix;
+    }
+
+    private Map<String, Object> toCompactRole(Role role) {
+        Map<String, Object> compact = new LinkedHashMap<>();
+        compact.put("roleId", role.getRoleId());
+        compact.put("roleCode", role.getRoleCode());
+        compact.put("roleName", role.getRoleName());
+        return compact;
+    }
+
+    private Map<String, Object> toCompactGroup(Group group) {
+        Map<String, Object> compact = new LinkedHashMap<>();
+        compact.put("groupId", group.getGroupId());
+        compact.put("groupCode", group.getGroupCode());
+        compact.put("groupName", group.getGroupName());
+        return compact;
+    }
+
+    private Map<String, Object> toCompactPlantWithDepartments(Map<String, Object> plant,
+                                                               Set<String> departmentIds,
+                                                               Map<String, Map<String, Object>> departmentsById) {
+        Map<String, Object> compactPlant = new LinkedHashMap<>();
+        compactPlant.put("plantId", stringValue(plant.get("plantId")));
+        compactPlant.put("plantCode", stringValue(plant.get("plantCode")));
+        compactPlant.put("plantName", stringValue(plant.get("plantName")));
+        compactPlant.put("type", stringValue(plant.get("type")));
+        compactPlant.put("isActive", plant.get("isActive"));
+
+        List<Map<String, Object>> departments = departmentIds.stream()
+            .map(departmentsById::get)
+            .filter(Objects::nonNull)
+            .toList();
+        compactPlant.put("departments", departments);
+        return compactPlant;
+    }
+
+    private Map<String, Object> toCompactDepartment(Map<String, Object> department) {
+        Map<String, Object> compact = new LinkedHashMap<>();
+        compact.put("departmentId", stringValue(department.get("departmentId")));
+        compact.put("departmentCode", stringValue(department.get("departmentCode")));
+        compact.put("departmentName", stringValue(department.get("departmentName")));
+        compact.put("path", stringValue(department.get("path")));
+        return compact;
+    }
+
+    private Map<String, Object> toCompactRolePermissions(Map<String, Object> rolePermissions) {
+        Map<String, Map<String, String>> catalog = buildPermissionCatalogIndex();
+        Map<String, String> moduleCodeById = catalog.getOrDefault("moduleCodeById", Map.of());
+        Map<String, String> moduleNameById = catalog.getOrDefault("moduleNameById", Map.of());
+        Map<String, String> screenCodeById = catalog.getOrDefault("screenCodeById", Map.of());
+        Map<String, String> screenNameById = catalog.getOrDefault("screenNameById", Map.of());
+        Map<String, String> featureCodeById = catalog.getOrDefault("featureCodeById", Map.of());
+        Map<String, String> featureNameById = catalog.getOrDefault("featureNameById", Map.of());
+
+        Map<String, Object> compact = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : rolePermissions.entrySet()) {
+            String roleId = entry.getKey();
+            Object value = entry.getValue();
+            if (!(value instanceof List<?> permissions)) {
+                compact.put(roleId, List.of());
+                continue;
+            }
+
+            List<Map<String, Object>> compactPermissions = new ArrayList<>();
+            for (Object item : permissions) {
+                if (!(item instanceof RolePermission permission)) {
+                    continue;
+                }
+
+                Map<String, Object> permissionNode = new LinkedHashMap<>();
+                permissionNode.put("moduleId", permission.getModuleId());
+                permissionNode.put("moduleCode", firstNonBlank(moduleCodeById.get(permission.getModuleId()), ""));
+                permissionNode.put("moduleName", firstNonBlank(moduleNameById.get(permission.getModuleId()), ""));
+
+                List<Map<String, Object>> compactScreens = new ArrayList<>();
+                if (permission.getScreenPermissions() != null) {
+                    for (RolePermission.ScreenPermission screenPermission : permission.getScreenPermissions()) {
+                        if (screenPermission == null || !StringUtils.hasText(screenPermission.getScreenId())) {
+                            continue;
+                        }
+                        Map<String, Object> screenNode = new LinkedHashMap<>();
+                        screenNode.put("screenId", screenPermission.getScreenId());
+                        screenNode.put("screenCode", firstNonBlank(screenCodeById.get(screenPermission.getScreenId()), ""));
+                        screenNode.put("screenName", firstNonBlank(screenNameById.get(screenPermission.getScreenId()), ""));
+                        screenNode.put("actions", screenPermission.getActions() == null ? List.of() : screenPermission.getActions());
+
+                        List<Map<String, Object>> compactFeatures = new ArrayList<>();
+                        if (screenPermission.getFeaturePermissions() != null) {
+                            for (RolePermission.FeaturePermission featurePermission : screenPermission.getFeaturePermissions()) {
+                                if (featurePermission == null || !StringUtils.hasText(featurePermission.getFeatureId())) {
+                                    continue;
+                                }
+                                Map<String, Object> featureNode = new LinkedHashMap<>();
+                                featureNode.put("featureId", featurePermission.getFeatureId());
+                                featureNode.put("featureCode", firstNonBlank(featureCodeById.get(featurePermission.getFeatureId()), ""));
+                                featureNode.put("featureName", firstNonBlank(featureNameById.get(featurePermission.getFeatureId()), ""));
+                                featureNode.put("actions", featurePermission.getActions() == null ? List.of() : featurePermission.getActions());
+                                compactFeatures.add(featureNode);
+                            }
+                        }
+
+                        screenNode.put("features", compactFeatures);
+                        compactScreens.add(screenNode);
+                    }
+                }
+
+                permissionNode.put("screens", compactScreens);
+                compactPermissions.add(permissionNode);
+            }
+            compact.put(roleId, compactPermissions);
+        }
+        return compact;
+    }
+
+    private Map<String, Map<String, String>> buildPermissionCatalogIndex() {
+        Map<String, String> moduleCodeById = new HashMap<>();
+        Map<String, String> moduleNameById = new HashMap<>();
+        Map<String, String> screenCodeById = new HashMap<>();
+        Map<String, String> screenNameById = new HashMap<>();
+        Map<String, String> featureCodeById = new HashMap<>();
+        Map<String, String> featureNameById = new HashMap<>();
+
+        Map<String, Object> tree = metadataCatalogService.getPermissionMatrixTree(true);
+        List<Map<String, Object>> modules = castList(tree.get("modules"));
+        for (Map<String, Object> module : modules) {
+            String moduleId = stringValue(module.get("moduleId"));
+            if (!StringUtils.hasText(moduleId)) {
+                continue;
+            }
+            moduleCodeById.put(moduleId, firstNonBlank(stringValue(module.get("moduleCode")), ""));
+            moduleNameById.put(moduleId, firstNonBlank(stringValue(module.get("moduleName")), ""));
+
+            List<Map<String, Object>> screens = castList(module.get("screens"));
+            for (Map<String, Object> screen : screens) {
+                String screenId = stringValue(screen.get("screenId"));
+                if (!StringUtils.hasText(screenId)) {
+                    continue;
+                }
+                screenCodeById.put(screenId, firstNonBlank(stringValue(screen.get("screenCode")), ""));
+                screenNameById.put(screenId, firstNonBlank(stringValue(screen.get("screenName")), ""));
+
+                List<Map<String, Object>> features = castList(screen.get("features"));
+                for (Map<String, Object> feature : features) {
+                    String featureId = stringValue(feature.get("featureId"));
+                    if (!StringUtils.hasText(featureId)) {
+                        continue;
+                    }
+                    featureCodeById.put(featureId, firstNonBlank(stringValue(feature.get("featureCode")), ""));
+                    featureNameById.put(featureId, firstNonBlank(stringValue(feature.get("featureName")), ""));
+                }
+            }
+        }
+
+        Map<String, Map<String, String>> index = new HashMap<>();
+        index.put("moduleCodeById", moduleCodeById);
+        index.put("moduleNameById", moduleNameById);
+        index.put("screenCodeById", screenCodeById);
+        index.put("screenNameById", screenNameById);
+        index.put("featureCodeById", featureCodeById);
+        index.put("featureNameById", featureNameById);
+        return index;
+    }
+
+    private Map<String, Object> toCompactModule(Map<String, Object> moduleNode) {
+        Map<String, Object> compact = new LinkedHashMap<>();
+        compact.put("moduleId", stringValue(moduleNode.get("moduleId")));
+        compact.put("moduleCode", stringValue(moduleNode.get("moduleCode")));
+        compact.put("moduleName", stringValue(moduleNode.get("moduleName")));
+        return compact;
+    }
+
+    private Map<String, Object> toCompactScreen(Map<String, Object> screenNode) {
+        Map<String, Object> compact = new LinkedHashMap<>();
+        compact.put("screenId", stringValue(screenNode.get("screenId")));
+        compact.put("screenCode", stringValue(screenNode.get("screenCode")));
+        compact.put("screenName", stringValue(screenNode.get("screenName")));
+        return compact;
+    }
+
+    private Map<String, Object> toCompactFeature(Map<String, Object> featureNode) {
+        Map<String, Object> compact = new LinkedHashMap<>();
+        compact.put("featureId", stringValue(featureNode.get("featureId")));
+        compact.put("featureCode", stringValue(featureNode.get("featureCode")));
+        compact.put("featureName", stringValue(featureNode.get("featureName")));
+        return compact;
     }
 
     private Set<String> fetchLicensedModules(String tenantId) {
@@ -1206,6 +1497,57 @@ public class UserService {
         } catch (RestClientException ex) {
             log.warn("Failed to fetch licensed modules for tenantId {}: {}", tenantId, ex.getMessage());
             return Set.of();
+        }
+    }
+
+    private Map<String, Object> resolveLoginLockStatus(String userId, boolean fallbackValue) {
+        Map<String, Object> fallback = new LinkedHashMap<>();
+        fallback.put("isLocked", fallbackValue);
+        fallback.put("failedAttempts", 0);
+
+        if (!StringUtils.hasText(userId)) {
+            return fallback;
+        }
+
+        String url = authServiceBaseUrl + "/internal/v1/auth/users/" + userId + "/lock-status";
+        try {
+            ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                return fallback;
+            }
+
+            Object wrapperData = response.getBody().get("data");
+            if (!(wrapperData instanceof Map<?, ?> payload)) {
+                return fallback;
+            }
+
+            Object rawLocked = payload.get("isLocked");
+            boolean resolvedLocked = fallbackValue;
+            if (rawLocked instanceof Boolean locked) {
+                resolvedLocked = locked;
+            } else if (rawLocked != null) {
+                resolvedLocked = Boolean.parseBoolean(String.valueOf(rawLocked));
+            }
+
+            int failedAttempts = 0;
+            Object rawFailedAttempts = payload.get("failedAttempts");
+            if (rawFailedAttempts instanceof Number n) {
+                failedAttempts = n.intValue();
+            } else if (rawFailedAttempts != null) {
+                try {
+                    failedAttempts = Integer.parseInt(String.valueOf(rawFailedAttempts));
+                } catch (NumberFormatException ignored) {
+                    failedAttempts = 0;
+                }
+            }
+
+            Map<String, Object> resolved = new LinkedHashMap<>();
+            resolved.put("isLocked", resolvedLocked);
+            resolved.put("failedAttempts", failedAttempts);
+            return resolved;
+        } catch (RestClientException ex) {
+            log.warn("Failed to fetch auth lock status for userId {}: {}", userId, ex.getMessage());
+            return fallback;
         }
     }
 

@@ -138,7 +138,13 @@ foreach ($entry in @(
         @{ Name = "Audit"; Port = 8084 }
     )) {
     if (Test-PortInUse -Port $entry.Port) {
-        Add-CheckResult -Name ("Port {0}" -f $entry.Port) -Status "WARN" -Message ("{0} port is already in use" -f $entry.Name)
+        $managedService = Get-ServiceDefinitions | Where-Object { $_.Port -eq $entry.Port } | Select-Object -First 1
+        if ($null -ne $managedService) {
+            Add-CheckResult -Name ("Port {0}" -f $entry.Port) -Status "PASS" -Message ("{0} port is already in use by the managed {1} service" -f $entry.Name, $managedService.Name)
+        }
+        else {
+            Add-CheckResult -Name ("Port {0}" -f $entry.Port) -Status "WARN" -Message ("{0} port is already in use" -f $entry.Name)
+        }
     }
     else {
         Add-CheckResult -Name ("Port {0}" -f $entry.Port) -Status "PASS" -Message ("{0} port is available" -f $entry.Name)

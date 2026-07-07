@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -31,8 +32,21 @@ public class AuditEventPublisher {
                         String status,
                         String failureReason,
                         Map<String, Object> metadata) {
+        publish(userId, username, action, entity, entityId, status, null, null, failureReason, metadata);
+        }
+
+        public void publish(String userId,
+                String username,
+                String action,
+                String entity,
+                String entityId,
+                String status,
+                Map<String, Object> before,
+                Map<String, Object> after,
+                String failureReason,
+                Map<String, Object> metadata) {
         try {
-                            String url = auditBaseUrl + "/internal/v1/audit/logs";
+            String url = auditBaseUrl + "/internal/v1/audit/logs";
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
 
@@ -43,11 +57,35 @@ public class AuditEventPublisher {
             payload.put("entity", entity);
             payload.put("entityId", entityId);
             payload.put("status", status);
+            payload.put("before", before);
+            payload.put("after", after);
             payload.put("failureReason", failureReason);
-            payload.put("metadata", metadata == null ? Map.of() : metadata);
-            Object tenantId = metadata == null ? null : metadata.get("tenantId");
+            Map<String, Object> metadataPayload = metadata == null
+                    ? new LinkedHashMap<>()
+                    : new LinkedHashMap<>(metadata);
+
+            Object tenantId = metadataPayload.remove("tenantId");
             if (tenantId != null) {
                 payload.put("tenantId", String.valueOf(tenantId));
+            }
+
+            Object ipAddress = metadataPayload.remove("ipAddress");
+            if (ipAddress != null) {
+                payload.put("ipAddress", String.valueOf(ipAddress));
+            }
+
+            Object sessionId = metadataPayload.remove("sessionId");
+            if (sessionId != null) {
+                payload.put("sessionId", String.valueOf(sessionId));
+            }
+
+            Object userAgent = metadataPayload.remove("userAgent");
+            if (userAgent != null) {
+                payload.put("userAgent", String.valueOf(userAgent));
+            }
+
+            if (!metadataPayload.isEmpty()) {
+                payload.put("metadata", metadataPayload);
             }
             payload.put("timestamp", Instant.now().toString());
 

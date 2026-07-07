@@ -20,9 +20,87 @@ if (-not (Test-Path $initScript)) {
     throw "Mongo seed script not found: $initScript"
 }
 
-$containerStatus = (& docker inspect -f "{{.State.Status}}" adavis-mongodb 2>$null)
-if ($LASTEXITCODE -ne 0 -or $containerStatus -ne "running") {
-    throw "Container adavis-mongodb is not running. Start Docker infrastructure first."
+function Test-ContainerExists {
+    param([Parameter(Mandatory)][string]$Name)
+
+    $match = (& docker ps -a --filter "name=^${Name}$" --format "{{.Names}}" 2>$null)
+    return ($LASTEXITCODE -eq 0 -and ($match -contains $Name))
+}
+
+function Get-ContainerRuntimeStatus {
+    param([Parameter(Mandatory)][string]$Name)
+
+    $status = (& docker inspect -f "{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}" $Name 2>$null)
+    if ($LASTEXITCODE -ne 0) {
+        return "missing"
+    }
+
+    return ("$status".Trim())
+}
+
+function Ensure-MongoContainerReady {
+    if (-not (Test-ContainerExists -Name "adavis-mongodb")) {
+        Write-Step "Mongo container not found; creating and starting mongodb via docker compose"
+        Invoke-DockerCompose -Arguments @("up", "-d", "mongodb")
+    }
+
+    $status = Get-ContainerRuntimeStatus -Name "adavis-mongodb"
+    if ($status -notmatch "running|healthy") {
+        Write-Step "Starting mongodb container"
+        Invoke-DockerCompose -Arguments @("up", "-d", "mongodb")
+    }
+
+    $deadline = (Get-Date).AddSeconds(120)
+    do {
+        $status = Get-ContainerRuntimeStatus -Name "adavis-mongodb"
+        if ($status -match "running|healthy") {
+            return
+        }
+        Start-Sleep -Seconds 3
+    } while ((Get-Date) -lt $deadline)
+
+    throw "Container adavis-mongodb did not become ready in time (last status: $status)."
+}
+
+Ensure-MongoContainerReady
+
+function Wait-MongoReady {
+    param(
+        [Parameter(Mandatory)][string[]]$Uris,
+        [int]$TimeoutSeconds = 90
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        foreach ($uri in $Uris) {
+            $previousNativePreference = $null
+            $hasNativePreference = $false
+            if (Get-Variable -Name PSNativeCommandUseErrorActionPreference -Scope Global -ErrorAction SilentlyContinue) {
+                $hasNativePreference = $true
+                $previousNativePreference = $Global:PSNativeCommandUseErrorActionPreference
+                $Global:PSNativeCommandUseErrorActionPreference = $false
+            }
+
+            try {
+                try {
+                    & docker exec adavis-mongodb mongosh $uri --quiet --eval "db.runCommand({ ping: 1 })" *> $null
+                    if ($LASTEXITCODE -eq 0) {
+                        return
+                    }
+                } catch {
+                    # Ignore transient connect/auth failures while probing readiness and continue retries.
+                }
+            } finally {
+                if ($hasNativePreference) {
+                    $Global:PSNativeCommandUseErrorActionPreference = $previousNativePreference
+                }
+            }
+        }
+
+        Start-Sleep -Seconds 2
+    } while ((Get-Date) -lt $deadline)
+
+    throw "MongoDB is not accepting connections yet (timed out after $TimeoutSeconds seconds)."
 }
 
 # Try common auth layouts because local environments may have been initialized in different ways.
@@ -41,7 +119,26 @@ function Invoke-MongoCommand {
 
     $lastError = $null
     foreach ($uri in $Uris) {
-        $output = & docker exec adavis-mongodb mongosh $uri --quiet @Arguments 2>&1
+        $previousNativePreference = $null
+        $hasNativePreference = $false
+        if (Get-Variable -Name PSNativeCommandUseErrorActionPreference -Scope Global -ErrorAction SilentlyContinue) {
+            $hasNativePreference = $true
+            $previousNativePreference = $Global:PSNativeCommandUseErrorActionPreference
+            $Global:PSNativeCommandUseErrorActionPreference = $false
+        }
+
+        try {
+            try {
+                $output = & docker exec adavis-mongodb mongosh $uri --quiet @Arguments 2>&1
+            } catch {
+                $output = @($_.Exception.Message)
+            }
+        } finally {
+            if ($hasNativePreference) {
+                $Global:PSNativeCommandUseErrorActionPreference = $previousNativePreference
+            }
+        }
+
         if ($LASTEXITCODE -eq 0) {
             if (-not $Silent -and $null -ne $output -and "$output".Length -gt 0) {
                 $output
@@ -58,6 +155,8 @@ function Invoke-MongoCommand {
 
     return $false
 }
+
+Wait-MongoReady -Uris $mongoUris
 
 if (-not $NoReset) {
     Write-Step "Dropping existing adavis_platform database"

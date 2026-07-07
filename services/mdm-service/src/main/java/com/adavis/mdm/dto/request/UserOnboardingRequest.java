@@ -27,7 +27,6 @@ public class UserOnboardingRequest {
 
     private String username;
 
-    @NotBlank(message = "Email is required")
     @Email(message = "Valid email is required")
     private String email;
 

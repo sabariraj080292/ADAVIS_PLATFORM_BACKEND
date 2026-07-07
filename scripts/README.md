@@ -41,10 +41,22 @@ This is useful when one service has compile errors but you still want the rest o
 ./scripts/setup-dev.ps1 -ForceRestart
 ```
 
-### Start only Docker infrastructure and services without re-seeding
+### Start only Docker infrastructure and services
 
 ```powershell
-./scripts/run-local.ps1 -SkipSeed
+./scripts/run-local.ps1
+```
+
+### Seed database as a separate step
+
+```powershell
+./scripts/seed-data.ps1
+```
+
+### Seed without dropping existing database
+
+```powershell
+./scripts/seed-data.ps1 -NoReset
 ```
 
 ### Stop services and keep Docker volumes

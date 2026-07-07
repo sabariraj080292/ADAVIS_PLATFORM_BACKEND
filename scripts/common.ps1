@@ -109,6 +109,25 @@ function Test-PortInUse {
     }
 }
 
+function Wait-ForPortFree {
+    param(
+        [Parameter(Mandatory)][int]$Port,
+        [int]$TimeoutSeconds = 30,
+        [int]$RetryIntervalSeconds = 1
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        if (-not (Test-PortInUse -Port $Port)) {
+            return $true
+        }
+
+        Start-Sleep -Seconds $RetryIntervalSeconds
+    } while ((Get-Date) -lt $deadline)
+
+    return $false
+}
+
 function Wait-ForUrl {
     param(
         [Parameter(Mandatory)][string]$Url,
@@ -173,6 +192,26 @@ function Start-AdavisService {
     $servicePath = Join-Path $Script:RepoRoot $Service.Path
     if (-not (Test-Path $servicePath)) {
         throw "Service path not found: $servicePath"
+    }
+
+    try {
+        $connections = @(Get-NetTCPConnection -State Listen -LocalPort $Service.Port -ErrorAction SilentlyContinue)
+        foreach ($connection in $connections) {
+            $owningProcessId = [int]$connection.OwningProcess
+            if ($owningProcessId -le 0) {
+                continue
+            }
+
+            Write-Step "Stopping existing process on port $($Service.Port) for $($Service.Name) (PID $owningProcessId)"
+            Stop-AdavisService -ProcessId $owningProcessId
+        }
+    }
+    catch {
+        Write-Warning "Failed to clear port $($Service.Port) for $($Service.Name): $($_.Exception.Message)"
+    }
+
+    if (-not (Wait-ForPortFree -Port $Service.Port -TimeoutSeconds 30)) {
+        throw "Port $($Service.Port) is still in use after stopping prior $($Service.Name) process."
     }
 
     $logFile = Join-Path $Script:LogDir ("{0}.log" -f $Service.Name)

@@ -37,6 +37,13 @@ public class InternalLicenseController {
         return ApiResponse.success("User count updated successfully", licenseService.updateUserCountByTenantId(tenantId, userCount));
     }
 
+    @PostMapping("/tenant/{tenantId}/user-count")
+    public ApiResponse<LicenseResponse> updateTenantUserCountViaPost(
+            @PathVariable String tenantId,
+            @RequestParam Integer userCount) {
+        return ApiResponse.success("User count updated successfully", licenseService.updateUserCountByTenantId(tenantId, userCount));
+    }
+
     @GetMapping("/tenant/{tenantId}/modules")
     public ApiResponse<ModuleResponse> getTenantModules(@PathVariable String tenantId) {
         return ApiResponse.success(licenseService.getModulesByTenantId(tenantId));

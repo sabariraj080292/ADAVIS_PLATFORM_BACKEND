@@ -30,6 +30,7 @@ import org.springframework.web.client.RestTemplate;
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -65,7 +66,8 @@ public class AuthenticationService {
 
     public LoginInitiateResponse initiateLogin(String identifier) {
         log.info("Initiating login lookup for identifier={}", identifier);
-        User user = findUserByIdentifier(identifier);
+        User user = findUserByIdentifierForInitiate(identifier);
+        validateUserCanLogin(user);
         log.info("Found user for login-initiate: userId={}, identifier={}", user.getUserId(), identifier);
         Credential credential = credentialRepository.findByUserId(user.getUserId())
                 .orElseThrow(() -> new UnauthorizedException("Password not set for this user"));
@@ -100,7 +102,7 @@ public class AuthenticationService {
                     "FAILURE", "Invalid credentials", Map.of(
                             "identifier", identifier,
                             "tenantId", failedTenantId == null ? "" : failedTenantId));
-            throw new UnauthorizedException("Invalid credentials");
+                throw new BusinessException("Invalid credentials", "INVALID_CREDENTIALS");
         }
 
         user.setFailedAttempts(0);
@@ -116,17 +118,17 @@ public class AuthenticationService {
             validateTenantLicenseForLogin(tenantId, user.getUserId());
         }
 
-        String[] nameParts = deriveNameParts(user);
-
-        List<String> roles = List.of();
-        String accessToken = jwtService.generateAccessToken(user.getUserId(), user.getUsername(), roles);
         String refreshToken = jwtService.generateRefreshToken(user.getUserId(), user.getUsername());
 
-        sessionService.createSession(user.getUserId(), tenantId, refreshToken, deviceInfo, ipAddress);
+        Session session = sessionService.createOrExtendSession(user.getUserId(), tenantId, refreshToken, deviceInfo, ipAddress);
+        List<String> roles = List.of();
+        String accessToken = jwtService.generateAccessToken(user.getUserId(), user.getUsername(), roles, session.getSessionId());
         auditEventPublisher.publish(user.getUserId(), user.getUsername(), "LOGIN", "AUTH_USER", user.getUserId(),
             "SUCCESS", null, Map.of(
                 "ipAddress", ipAddress == null ? "" : ipAddress,
-                "tenantId", tenantId == null ? "" : tenantId));
+            "tenantId", tenantId == null ? "" : tenantId,
+            "sessionId", session.getSessionId() == null ? "" : session.getSessionId(),
+            "userAgent", deviceInfo == null ? "" : deviceInfo));
 
         return AuthResponse.builder()
                 .accessToken(accessToken)
@@ -134,11 +136,8 @@ public class AuthenticationService {
                 .tokenType("Bearer")
                 .expiresIn(3600000L)
                 .refreshExpiresIn(86400000L)
+            .sessionId(session.getSessionId())
                 .userId(user.getUserId())
-                .username(user.getUsername())
-                .email(user.getEmail())
-                .firstName(nameParts[0])
-                .lastName(nameParts[1])
                 .tenantId(tenantId)
                 .build();
     }
@@ -171,8 +170,6 @@ public class AuthenticationService {
 
         blacklistToken(refreshToken, jwtService.getExpirationDate(refreshToken));
 
-        List<String> roles = List.of();
-        String newAccessToken = jwtService.generateAccessToken(user.getUserId(), user.getUsername(), roles);
         String newRefreshToken = jwtService.generateRefreshToken(user.getUserId(), user.getUsername());
 
         existingSession.setIsActive(false);
@@ -181,9 +178,9 @@ public class AuthenticationService {
         String tenantId = SUPER_ADMIN_USER_ID.equalsIgnoreCase(user.getUserId())
             ? firstNonBlank(resolveTenantIdSilently(user.getUserId()), superAdminDefaultTenantId)
             : resolveTenantIdSilently(user.getUserId());
-        sessionService.createSession(user.getUserId(), tenantId, newRefreshToken, deviceInfo, ipAddress);
-
-        String[] nameParts = deriveNameParts(user);
+        Session session = sessionService.createOrExtendSession(user.getUserId(), tenantId, newRefreshToken, deviceInfo, ipAddress);
+        List<String> roles = List.of();
+        String newAccessToken = jwtService.generateAccessToken(user.getUserId(), user.getUsername(), roles, session.getSessionId());
 
         return AuthResponse.builder()
                 .accessToken(newAccessToken)
@@ -191,11 +188,9 @@ public class AuthenticationService {
                 .tokenType("Bearer")
                 .expiresIn(3600000L)
                 .refreshExpiresIn(86400000L)
+            .sessionId(session.getSessionId())
                 .userId(user.getUserId())
-                .username(user.getUsername())
-                .email(user.getEmail())
-            .firstName(nameParts[0])
-            .lastName(nameParts[1])
+            .tenantId(tenantId)
                 .build();
     }
 
@@ -216,27 +211,24 @@ public class AuthenticationService {
             throw new UnauthorizedException("Session is inactive");
         }
 
-        String newAccessToken = jwtService.generateAccessToken(userId, user.getUsername(), List.of());
         existingSession.setLastActivity(Instant.now());
         existingSession.setExpiresAt(Instant.now().plusSeconds(30L * 60L));
         sessionRepository.save(existingSession);
-
-        String[] nameParts = deriveNameParts(user);
+        String newAccessToken = jwtService.generateAccessToken(userId, user.getUsername(), List.of(), existingSession.getSessionId());
 
         return AuthResponse.builder()
                 .accessToken(newAccessToken)
                 .refreshToken(refreshToken)
                 .tokenType("Bearer")
                 .expiresIn(3600000L)
+                .refreshExpiresIn(86400000L)
+                .sessionId(existingSession.getSessionId())
                 .userId(userId)
-                .username(user.getUsername())
-                .email(user.getEmail())
-            .firstName(nameParts[0])
-            .lastName(nameParts[1])
+                .tenantId(existingSession.getTenantId())
                 .build();
     }
 
-    public void logout(String token) {
+    public void logout(String token, String ipAddress, String deviceInfo) {
         String userId = null;
         String username = null;
         String bearerToken = token;
@@ -261,13 +253,15 @@ public class AuthenticationService {
         }
 
         if (userId != null) {
-            sessionService.terminateAllSessions(userId);
+            sessionService.terminateLatestActiveSession(userId, ipAddress, deviceInfo);
         } else if (bearerToken != null && !bearerToken.isBlank()) {
             sessionService.terminateSessionByRefreshToken(bearerToken);
         }
 
         auditEventPublisher.publish(userId, username, "LOGOUT", "AUTH_USER", userId,
-                "SUCCESS", null, Map.of());
+                "SUCCESS", null, Map.of(
+                        "ipAddress", ipAddress == null ? "" : ipAddress,
+                        "userAgent", deviceInfo == null ? "" : deviceInfo));
     }
 
     public void provisionUserWithInitialPassword(String userId, String username, String email, String initialPassword) {
@@ -349,11 +343,32 @@ public class AuthenticationService {
                 .build();
     }
 
+    public Map<String, Object> getUserLockStatus(String userId) {
+        User user = userRepository.findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", userId));
+
+        int failedAttempts = user.getFailedAttempts() == null ? 0 : user.getFailedAttempts();
+        boolean isLocked = failedAttempts >= 5;
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("userId", user.getUserId());
+        payload.put("failedAttempts", failedAttempts);
+        payload.put("isLocked", isLocked);
+        return payload;
+    }
+
     private User findUserByIdentifier(String identifier) {
         String normalizedIdentifier = identifier == null ? null : identifier.trim();
         return userRepository.findByUserId(normalizedIdentifier)
             .or(() -> userRepository.findByEmail(normalizedIdentifier))
                 .orElseThrow(() -> new UnauthorizedException("User not found"));
+    }
+
+    private User findUserByIdentifierForInitiate(String identifier) {
+        String normalizedIdentifier = identifier == null ? null : identifier.trim();
+        return userRepository.findByUserId(normalizedIdentifier)
+                .or(() -> userRepository.findByEmail(normalizedIdentifier))
+                .orElseThrow(() -> new ResourceNotFoundException("User", normalizedIdentifier));
     }
 
     private User upsertActiveUser(String userId, String username, String email) {

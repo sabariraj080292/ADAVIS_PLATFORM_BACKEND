@@ -22,7 +22,11 @@ public class AuthExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException ex) {
         log.warn("Business exception: {}", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        HttpStatus status = switch (ex.getErrorCode()) {
+            case "ACCOUNT_LOCKED", "ACCOUNT_DEACTIVATED", "ACCOUNT_INACTIVE", "ACCOUNT_DELETED", "FORBIDDEN_OPERATION" -> HttpStatus.FORBIDDEN;
+            default -> HttpStatus.BAD_REQUEST;
+        };
+        return ResponseEntity.status(status)
                 .body(ApiResponse.error(ex.getMessage(), ex.getErrorCode()));
     }
 

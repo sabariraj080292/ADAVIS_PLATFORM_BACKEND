@@ -65,6 +65,10 @@ public class JwtTokenProvider {
         return parseToken(token).get("username", String.class);
     }
 
+    public String getSessionIdFromToken(String token) {
+        return parseToken(token).get("sessionId", String.class);
+    }
+
     public boolean isTokenExpired(String token) {
         try {
             return parseToken(token).getExpiration().before(new Date());

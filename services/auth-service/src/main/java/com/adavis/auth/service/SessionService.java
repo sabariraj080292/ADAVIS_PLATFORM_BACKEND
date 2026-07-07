@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -50,6 +51,34 @@ public class SessionService {
         return saved;
     }
 
+    public Session createOrExtendSession(String userId,
+                                         String tenantId,
+                                         String refreshToken,
+                                         String deviceInfo,
+                                         String ipAddress) {
+        expireSessions();
+
+        if (ipAddress != null && !ipAddress.isBlank()) {
+            List<Session> activeFromSameIp = sessionRepository.findByUserIdAndIpAddressAndIsActiveTrue(userId, ipAddress);
+            if (!activeFromSameIp.isEmpty()) {
+                Session existing = activeFromSameIp.stream()
+                        .max(Comparator.comparing(Session::getLastActivity, Comparator.nullsLast(Comparator.naturalOrder())))
+                        .orElse(activeFromSameIp.get(0));
+                existing.setRefreshToken(refreshToken);
+                existing.setDeviceInfo(deviceInfo != null ? deviceInfo : existing.getDeviceInfo());
+                existing.setLastActivity(Instant.now());
+                existing.setExpiresAt(Instant.now().plusSeconds(sessionTimeoutMinutes * 60L));
+                existing.setIsActive(true);
+                Session saved = sessionRepository.save(existing);
+                publishSessionAudit("SESSION_EXTENDED", saved);
+                log.info("Extended existing session for user {} from ip {} with sessionId {}", userId, ipAddress, saved.getSessionId());
+                return saved;
+            }
+        }
+
+        return createSession(userId, tenantId, refreshToken, deviceInfo, ipAddress);
+    }
+
     public List<SessionResponse> getActiveSessions(String userId) {
         expireSessions();
         List<Session> sessions = sessionRepository.findByUserIdAndIsActiveTrue(userId);
@@ -75,6 +104,27 @@ public class SessionService {
             publishSessionAudit("SESSION_TERMINATED", saved);
         });
         log.info("Terminated all sessions for user: {}", userId);
+    }
+
+    public void terminateLatestActiveSession(String userId, String ipAddress, String deviceInfo) {
+        expireSessions();
+
+        List<Session> activeSessions = sessionRepository.findByUserIdAndIsActiveTrue(userId);
+        if (activeSessions.isEmpty()) {
+            return;
+        }
+
+        Session target = activeSessions.stream()
+                .filter(session -> ipAddress != null && ipAddress.equals(session.getIpAddress()))
+                .max(Comparator.comparing(Session::getLastActivity, Comparator.nullsLast(Comparator.naturalOrder())))
+                .orElseGet(() -> activeSessions.stream()
+                        .max(Comparator.comparing(Session::getLastActivity, Comparator.nullsLast(Comparator.naturalOrder())))
+                        .orElse(activeSessions.get(0)));
+
+        target.setIsActive(false);
+        Session saved = sessionRepository.save(target);
+        publishSessionAudit("SESSION_TERMINATED", saved);
+        log.info("Terminated session {} for user {} (ip={}, device={})", saved.getSessionId(), userId, ipAddress, deviceInfo);
     }
 
     public void terminateSessionByRefreshToken(String refreshToken) {
@@ -112,6 +162,7 @@ public class SessionService {
                 java.util.Map.of(
                         "tenantId", session.getTenantId() == null ? "" : session.getTenantId(),
                         "ipAddress", session.getIpAddress() == null ? "" : session.getIpAddress(),
+                "deviceInfo", session.getDeviceInfo() == null ? "" : session.getDeviceInfo(),
                         "isActive", Boolean.TRUE.equals(session.getIsActive())
                 )
         );
