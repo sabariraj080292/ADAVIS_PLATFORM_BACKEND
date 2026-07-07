@@ -8,7 +8,6 @@ Equipment_master (iiot_assets to iiot_equipement_master)
     roomId (optional)
     equipmentId
     
-
 critical_parameters  (iiot_asset_tags to equipment_critical_parameters)
     parameterSeqId
     equipmentId

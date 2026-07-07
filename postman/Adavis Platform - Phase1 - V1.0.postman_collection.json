@@ -3861,6 +3861,644 @@
       ]
     },
     {
+      "name": "IIOT Master Data",
+      "item": [
+        {
+          "name": "Create Equipment Master",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Create equipment master returns success', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  const json = pm.response.json();",
+                  "  const id = json?.data?.equipmentId;",
+                  "  if (id) pm.collectionVariables.set('iiotEquipmentId', id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"equipmentId\": \"{{iiotEquipmentId}}\",\n  \"equipmentCode\": \"{{iiotEquipmentCode}}\",\n  \"equipmentName\": \"{{iiotEquipmentName}}\",\n  \"tenantId\": \"{{tenantId}}\",\n  \"plantId\": \"{{plantId}}\",\n  \"areaId\": \"{{areaId}}\",\n  \"roomId\": \"{{roomId}}\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/equipment-master",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "equipment-master"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Equipment Master",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/equipment-master",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "equipment-master"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Equipment Master",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/equipment-master/{{iiotEquipmentId}}",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "equipment-master",
+                "{{iiotEquipmentId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Equipment Master",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"equipmentName\": \"{{iiotEquipmentName}} Updated\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/equipment-master/{{iiotEquipmentId}}",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "equipment-master",
+                "{{iiotEquipmentId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate Equipment Master",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/equipment-master/{{iiotEquipmentId}}",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "equipment-master",
+                "{{iiotEquipmentId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Activate Equipment Master",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/equipment-master/{{iiotEquipmentId}}/activate",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "equipment-master",
+                "{{iiotEquipmentId}}",
+                "activate"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Critical Parameter",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  const json = pm.response.json();",
+                  "  const id = json?.data?.parameterId;",
+                  "  if (id) pm.collectionVariables.set('iiotParameterId', id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parameterId\": \"{{iiotParameterId}}\",\n  \"equipmentId\": \"{{iiotEquipmentId}}\",\n  \"parameterCode\": \"{{iiotParameterCode}}\",\n  \"parameterName\": \"{{iiotParameterName}}\",\n  \"parameterType\": \"FLOAT\",\n  \"tenantId\": \"{{tenantId}}\",\n  \"plantId\": \"{{plantId}}\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/critical-parameters",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "critical-parameters"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Critical Parameters",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/critical-parameters",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "critical-parameters"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Critical Parameter",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/critical-parameters/{{iiotParameterId}}",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "critical-parameters",
+                "{{iiotParameterId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Critical Parameter",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parameterName\": \"{{iiotParameterName}} Updated\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/critical-parameters/{{iiotParameterId}}",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "critical-parameters",
+                "{{iiotParameterId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate Critical Parameter",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/critical-parameters/{{iiotParameterId}}",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "critical-parameters",
+                "{{iiotParameterId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Activate Critical Parameter",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/critical-parameters/{{iiotParameterId}}/activate",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "critical-parameters",
+                "{{iiotParameterId}}",
+                "activate"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Critical Parameter Limit",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  const json = pm.response.json();",
+                  "  const id = json?.data?.parameterLimitId;",
+                  "  if (id) pm.collectionVariables.set('iiotParameterLimitId', id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parameterLimitId\": \"{{iiotParameterLimitId}}\",\n  \"parameterId\": \"{{iiotParameterId}}\",\n  \"equipmentId\": \"{{iiotEquipmentId}}\",\n  \"tenantId\": \"{{tenantId}}\",\n  \"plantId\": \"{{plantId}}\",\n  \"lowCriticalValue\": 5.5,\n  \"highCriticalValue\": 7.5,\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/critical-parameter-limits",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "critical-parameter-limits"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Critical Parameter Limits",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/critical-parameter-limits",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "critical-parameter-limits"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Critical Parameter Limit",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/critical-parameter-limits/{{iiotParameterLimitId}}",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "critical-parameter-limits",
+                "{{iiotParameterLimitId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Critical Parameter Limit",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lowCriticalValue\": 5.4,\n  \"highCriticalValue\": 7.6,\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/critical-parameter-limits/{{iiotParameterLimitId}}",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "critical-parameter-limits",
+                "{{iiotParameterLimitId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate Critical Parameter Limit",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/critical-parameter-limits/{{iiotParameterLimitId}}",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "critical-parameter-limits",
+                "{{iiotParameterLimitId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Activate Critical Parameter Limit",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/critical-parameter-limits/{{iiotParameterLimitId}}/activate",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "critical-parameter-limits",
+                "{{iiotParameterLimitId}}",
+                "activate"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Product Master",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  const json = pm.response.json();",
+                  "  const id = json?.data?.productId;",
+                  "  if (id) pm.collectionVariables.set('iiotProductId', id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{iiotProductId}}\",\n  \"productCode\": \"{{iiotProductCode}}\",\n  \"productName\": \"{{iiotProductName}}\",\n  \"tenantId\": \"{{tenantId}}\",\n  \"plantId\": \"{{plantId}}\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/product-master",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "product-master"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Product Master",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/product-master",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "product-master"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Product Master",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/product-master/{{iiotProductId}}",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "product-master",
+                "{{iiotProductId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Product Master",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productName\": \"{{iiotProductName}} Updated\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/product-master/{{iiotProductId}}",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "product-master",
+                "{{iiotProductId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate Product Master",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/product-master/{{iiotProductId}}",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "product-master",
+                "{{iiotProductId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Activate Product Master",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/product-master/{{iiotProductId}}/activate",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "product-master",
+                "{{iiotProductId}}",
+                "activate"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "IIOT Reports Smoke",
       "item": [
         {
@@ -3938,6 +4576,48 @@
                 "v1",
                 "auth",
                 "authenticate"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Source Mapping By Equipment",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/source-mappings/{{iiotEquipmentId}}",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "source-mappings",
+                "{{iiotEquipmentId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Equipment Live Status By Equipment",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/equipment-live-status/{{iiotEquipmentId}}",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "equipment-live-status",
+                "{{iiotEquipmentId}}"
               ]
             }
           },
@@ -4158,6 +4838,42 @@
     {
       "key": "iiotLimit",
       "value": "3"
+    },
+    {
+      "key": "iiotEquipmentCode",
+      "value": "RMG100L2PVII"
+    },
+    {
+      "key": "iiotEquipmentName",
+      "value": "Rapid Mixer Granulator 100L #2"
+    },
+    {
+      "key": "iiotParameterId",
+      "value": "PRM-IMP-A"
+    },
+    {
+      "key": "iiotParameterCode",
+      "value": "impellerA"
+    },
+    {
+      "key": "iiotParameterName",
+      "value": "Impeller A"
+    },
+    {
+      "key": "iiotParameterLimitId",
+      "value": "LMT-IMP-A-20260101"
+    },
+    {
+      "key": "iiotProductId",
+      "value": "PROD-IMI-25"
+    },
+    {
+      "key": "iiotProductCode",
+      "value": "IMI25"
+    },
+    {
+      "key": "iiotProductName",
+      "value": "IMIPRAMINE 25 MG TABLETS"
     },
     {
       "key": "baseUrl",

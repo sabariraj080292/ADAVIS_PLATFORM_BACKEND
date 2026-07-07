@@ -592,6 +592,44 @@ public class IiotOperationsService {
         return response;
     }
 
+    public List<Map<String, Object>> getSourceMappings() {
+        Query query = new Query();
+        query.with(Sort.by(Sort.Direction.ASC, "tenantId", "equipmentId"));
+        return mongoTemplate.find(query, Document.class, SOURCE_MAPPING_COLLECTION)
+                .stream()
+                .map(this::toMap)
+                .toList();
+    }
+
+    public Map<String, Object> getSourceMapping(String equipmentId) {
+        Query query = new Query(Criteria.where("equipmentId").is(equipmentId));
+        query.with(Sort.by(Sort.Direction.DESC, "updatedAt"));
+        Document doc = mongoTemplate.findOne(query, Document.class, SOURCE_MAPPING_COLLECTION);
+        if (doc == null) {
+            throw new BusinessException("Source mapping not found for equipmentId: " + equipmentId);
+        }
+        return toMap(doc);
+    }
+
+    public List<Map<String, Object>> getEquipmentLiveStatuses() {
+        Query query = new Query();
+        query.with(Sort.by(Sort.Direction.DESC, "updatedAt", "equipmentId"));
+        return mongoTemplate.find(query, Document.class, EQUIPMENT_LIVE_STATUS_COLLECTION)
+                .stream()
+                .map(this::toMap)
+                .toList();
+    }
+
+    public Map<String, Object> getEquipmentLiveStatus(String equipmentId) {
+        Query query = new Query(Criteria.where("equipmentId").is(equipmentId));
+        query.with(Sort.by(Sort.Direction.DESC, "updatedAt"));
+        Document doc = mongoTemplate.findOne(query, Document.class, EQUIPMENT_LIVE_STATUS_COLLECTION);
+        if (doc == null) {
+            throw new BusinessException("Equipment live status not found for equipmentId: " + equipmentId);
+        }
+        return toMap(doc);
+    }
+
     private void ingestEquipmentStreams(Document mapping) {
         String tenantId = firstNonBlank(stringValue(mapping.get("tenantId")), DEFAULT_TENANT_ID);
         String equipmentId = requireText(toMap(mapping), "equipmentId");

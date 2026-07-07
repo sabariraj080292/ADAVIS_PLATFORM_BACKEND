@@ -43,6 +43,10 @@ seed_db() {
   } > "$temp_js"
   docker exec -i adavis-mongodb mongosh "mongodb://admin:Admin123!@localhost:27017/adavis_platform?authSource=admin" --quiet < "$temp_js"
   rm -f "$temp_js"
+
+  if [[ -f "$REPO_ROOT/docker/seed_data_iiot_file.js" ]]; then
+    docker exec -i adavis-mongodb mongosh "mongodb://admin:Admin123!@localhost:27017/adavis_platform?authSource=admin" --quiet < "$REPO_ROOT/docker/seed_data_iiot_file.js"
+  fi
 }
 
 start_service() {

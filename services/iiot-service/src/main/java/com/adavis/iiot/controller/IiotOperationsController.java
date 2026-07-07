@@ -169,6 +169,26 @@ public class IiotOperationsController {
         return ResponseEntity.ok(ApiResponse.success(iiotOperationsService.getIngestionStatus(equipmentId, streamType)));
     }
 
+    @GetMapping("/source-mappings")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getSourceMappings() {
+        return ResponseEntity.ok(ApiResponse.success(iiotOperationsService.getSourceMappings()));
+    }
+
+    @GetMapping("/source-mappings/{equipmentId}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getSourceMapping(@PathVariable String equipmentId) {
+        return ResponseEntity.ok(ApiResponse.success(iiotOperationsService.getSourceMapping(equipmentId)));
+    }
+
+    @GetMapping("/equipment-live-status")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getEquipmentLiveStatuses() {
+        return ResponseEntity.ok(ApiResponse.success(iiotOperationsService.getEquipmentLiveStatuses()));
+    }
+
+    @GetMapping("/equipment-live-status/{equipmentId}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getEquipmentLiveStatus(@PathVariable String equipmentId) {
+        return ResponseEntity.ok(ApiResponse.success(iiotOperationsService.getEquipmentLiveStatus(equipmentId)));
+    }
+
     @GetMapping("/reports/batch-summary")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getBatchSummary(
             @RequestParam(required = false) String tenantId,

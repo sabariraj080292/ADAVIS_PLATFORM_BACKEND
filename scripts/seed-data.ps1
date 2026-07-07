@@ -20,6 +20,8 @@ if (-not (Test-Path $initScript)) {
     throw "Mongo seed script not found: $initScript"
 }
 
+$iiotSeedScript = Join-Path (Get-RepoRoot) "docker\seed_data_iiot_file.js"
+
 function Test-ContainerExists {
     param([Parameter(Mandatory)][string]$Name)
 
@@ -168,6 +170,16 @@ if (-not $NoReset) {
 Write-Step "Applying seed script to MongoDB"
 if (-not (Invoke-MongoCommand -Uris $mongoUris -Arguments @("/docker-entrypoint-initdb.d/init-mongo.js") -Silent)) {
     throw "Mongo seed operation failed."
+}
+
+if (Test-Path $iiotSeedScript) {
+    Write-Step "Applying IIOT sample seed script to MongoDB"
+    if (-not (Invoke-MongoCommand -Uris $mongoUris -Arguments @("/seed/seed_data_iiot_file.js") -Silent)) {
+        throw "IIOT seed operation failed."
+    }
+}
+else {
+    Write-Step "IIOT seed script not found, skipping: $iiotSeedScript"
 }
 
 Write-Step "Verifying seeded collections"
