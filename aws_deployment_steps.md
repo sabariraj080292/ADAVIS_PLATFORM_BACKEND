@@ -291,6 +291,7 @@ What `deploy-aws.sh` does
 - validates `JWT_SECRET`
 - builds missing JARs if needed
 - validates Docker Compose configuration
+- builds service images sequentially to reduce Docker exporter failures on smaller EC2 hosts
 - starts MongoDB, Redis, Redpanda, and all Spring services
 - waits for API gateway health
 
@@ -419,7 +420,7 @@ docker compose --env-file .env.aws -f docker/docker-compose.aws.yml build --no-c
 
 Notes:
 
-- `services/mdm-service/.dockerignore` should be present to keep build context small on EC2.
+- Service-level `.dockerignore` files (for `auth-service`, `mdm-service`, `audit-service`, `api-gateway`, `iiot-service`, `license-service`) should be present to keep build context small on EC2.
 - If `build --progress=plain` still fails, capture the last 30 to 50 lines of output and inspect `no space left on device`, `input/output error`, or registry pull failures.
 
 Cleanup commands for AWS memory or disk pressure

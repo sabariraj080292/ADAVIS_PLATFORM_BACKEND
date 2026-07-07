@@ -125,8 +125,23 @@ fi
 echo "Validating docker compose configuration..."
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" config >/dev/null
 
-echo "Building and starting Adavis Platform (AWS profile)..."
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --build --remove-orphans
+echo "Building Adavis Platform services sequentially (AWS profile)..."
+services_to_build=(
+  auth-service
+  mdm-service
+  iiot-service
+  license-service
+  audit-service
+  api-gateway
+)
+
+for service in "${services_to_build[@]}"; do
+  echo "Building service: $service"
+  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" build "$service"
+done
+
+echo "Starting Adavis Platform services..."
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --remove-orphans
 
 echo "Waiting for API gateway health..."
 deadline=$((SECONDS + STARTUP_TIMEOUT_SECONDS))
