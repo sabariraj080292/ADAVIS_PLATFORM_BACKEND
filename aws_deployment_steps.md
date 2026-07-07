@@ -255,11 +255,34 @@ Required `.env.aws` keys
 - `KAFKA_BOOTSTRAP_SERVERS`
 - `CORS_ALLOWED_ORIGINS`
 
+IIOT Phase 1 batch ingestion keys
+
+- `IIOT_INGESTION_SCHEDULER_DELAY_MS` (default `15000`)
+- `IIOT_SOURCE_DB_URL`
+- `IIOT_SOURCE_DB_USERNAME`
+- `IIOT_SOURCE_DB_PASSWORD`
+
 Deploy on AWS
 
 ```bash
 chmod +x scripts/deploy-aws.sh scripts/status-aws.sh scripts/stop-aws.sh
 ./scripts/deploy-aws.sh
+```
+
+Seed IIOT sample data for UI development support
+
+After deployment, run:
+
+```bash
+docker compose --env-file .env.aws -f docker/docker-compose.aws.yml exec -T mongodb \
+	mongosh "mongodb://admin:Admin123!@localhost:27017/adavis_platform?authSource=admin" \
+	--file /seed/seed_data_iiot_file.js
+```
+
+If the above path is unavailable in your image, run from repository root on EC2:
+
+```bash
+mongosh "mongodb://admin:Admin123!@localhost:37017/adavis_platform?authSource=admin" --file docker/seed_data_iiot_file.js
 ```
 
 What `deploy-aws.sh` does

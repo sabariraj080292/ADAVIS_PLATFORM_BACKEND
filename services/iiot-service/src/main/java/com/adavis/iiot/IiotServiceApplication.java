@@ -4,9 +4,11 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @EnableCaching
+@EnableScheduling
 @ComponentScan(basePackages = {"com.adavis.iiot", "com.adavis.common", "com.adavis.security"})
 public class IiotServiceApplication {
 

@@ -16,7 +16,7 @@ def generate_license():
 
     payload = {
         "tenantId": "TNT-0001",
-
+        'licenceKey': 'LIC-0001',
         "plan": {
             "planId": "PLAN_ENTERPRISE",
             "planName": "Enterprise",

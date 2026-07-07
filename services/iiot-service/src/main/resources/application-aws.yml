@@ -15,3 +15,11 @@ logging:
   level:
     com.adavis.iiot: INFO
     org.springframework.data.mongodb: INFO
+
+iiot:
+  ingestion:
+    scheduler-delay-ms: ${IIOT_INGESTION_SCHEDULER_DELAY_MS:15000}
+    source-db:
+      url: ${IIOT_SOURCE_DB_URL:}
+      username: ${IIOT_SOURCE_DB_USERNAME:}
+      password: ${IIOT_SOURCE_DB_PASSWORD:}

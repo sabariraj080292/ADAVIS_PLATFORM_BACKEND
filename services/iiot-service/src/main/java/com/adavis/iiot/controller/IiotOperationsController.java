@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -24,102 +25,219 @@ public class IiotOperationsController {
 
     private final IiotOperationsService iiotOperationsService;
 
-    @PostMapping("/assets")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> createAsset(@RequestBody Map<String, Object> request) {
+    @PostMapping("/equipment-master")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> createEquipmentMaster(@RequestBody Map<String, Object> request) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Asset created", iiotOperationsService.createAsset(request)));
+                .body(ApiResponse.success("Equipment master created", iiotOperationsService.createEquipmentMaster(request)));
     }
 
-    @GetMapping("/assets")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getAssets() {
-        return ResponseEntity.ok(ApiResponse.success(iiotOperationsService.getAssets()));
+    @GetMapping("/equipment-master")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getEquipmentMasters() {
+        return ResponseEntity.ok(ApiResponse.success(iiotOperationsService.getEquipmentMasters()));
     }
 
-    @GetMapping("/assets/{assetId}")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getAsset(@PathVariable String assetId) {
-        return ResponseEntity.ok(ApiResponse.success(iiotOperationsService.getAsset(assetId)));
+    @GetMapping("/equipment-master/{equipmentId}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getEquipmentMaster(@PathVariable String equipmentId) {
+        return ResponseEntity.ok(ApiResponse.success(iiotOperationsService.getEquipmentMaster(equipmentId)));
     }
 
-    @PutMapping("/assets/{assetId}")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> updateAsset(
-            @PathVariable String assetId,
+    @PutMapping("/equipment-master/{equipmentId}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> updateEquipmentMaster(
+            @PathVariable String equipmentId,
             @RequestBody Map<String, Object> request) {
-        return ResponseEntity.ok(ApiResponse.success("Asset updated", iiotOperationsService.updateAsset(assetId, request)));
+        return ResponseEntity.ok(ApiResponse.success("Equipment master updated", iiotOperationsService.updateEquipmentMaster(equipmentId, request)));
     }
 
-    @DeleteMapping("/assets/{assetId}")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> deleteAsset(@PathVariable String assetId) {
-        return ResponseEntity.ok(ApiResponse.success("Asset deleted", iiotOperationsService.deleteAsset(assetId)));
+    @DeleteMapping("/equipment-master/{equipmentId}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> deactivateEquipmentMaster(@PathVariable String equipmentId) {
+        return ResponseEntity.ok(ApiResponse.success("Equipment master deactivated", iiotOperationsService.deactivateEquipmentMaster(equipmentId)));
     }
 
-    @PostMapping("/assets/{assetId}/activate")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> reactivateAsset(@PathVariable String assetId) {
-        return ResponseEntity.ok(ApiResponse.success("Asset reactivated", iiotOperationsService.reactivateAsset(assetId)));
+    @PostMapping("/equipment-master/{equipmentId}/activate")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> activateEquipmentMaster(@PathVariable String equipmentId) {
+        return ResponseEntity.ok(ApiResponse.success("Equipment master activated", iiotOperationsService.activateEquipmentMaster(equipmentId)));
     }
 
-    @PostMapping("/asset-tags")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> createAssetTag(@RequestBody Map<String, Object> request) {
+    @PostMapping("/critical-parameters")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> createCriticalParameter(@RequestBody Map<String, Object> request) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Asset tag created", iiotOperationsService.createAssetTag(request)));
+                .body(ApiResponse.success("Critical parameter created", iiotOperationsService.createCriticalParameter(request)));
     }
 
-    @GetMapping("/asset-tags")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getAssetTags() {
-        return ResponseEntity.ok(ApiResponse.success(iiotOperationsService.getAssetTags()));
+    @GetMapping("/critical-parameters")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getCriticalParameters() {
+        return ResponseEntity.ok(ApiResponse.success(iiotOperationsService.getCriticalParameters()));
     }
 
-    @GetMapping("/asset-tags/{tagId}")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getAssetTag(@PathVariable String tagId) {
-        return ResponseEntity.ok(ApiResponse.success(iiotOperationsService.getAssetTag(tagId)));
+    @GetMapping("/critical-parameters/{parameterId}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getCriticalParameter(@PathVariable String parameterId) {
+        return ResponseEntity.ok(ApiResponse.success(iiotOperationsService.getCriticalParameter(parameterId)));
     }
 
-    @PutMapping("/asset-tags/{tagId}")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> updateAssetTag(
-            @PathVariable String tagId,
+    @PutMapping("/critical-parameters/{parameterId}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> updateCriticalParameter(
+            @PathVariable String parameterId,
             @RequestBody Map<String, Object> request) {
-        return ResponseEntity.ok(ApiResponse.success("Asset tag updated", iiotOperationsService.updateAssetTag(tagId, request)));
+        return ResponseEntity.ok(ApiResponse.success("Critical parameter updated", iiotOperationsService.updateCriticalParameter(parameterId, request)));
     }
 
-    @DeleteMapping("/asset-tags/{tagId}")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> deleteAssetTag(@PathVariable String tagId) {
-        return ResponseEntity.ok(ApiResponse.success("Asset tag deleted", iiotOperationsService.deleteAssetTag(tagId)));
+    @DeleteMapping("/critical-parameters/{parameterId}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> deactivateCriticalParameter(@PathVariable String parameterId) {
+        return ResponseEntity.ok(ApiResponse.success("Critical parameter deactivated", iiotOperationsService.deactivateCriticalParameter(parameterId)));
     }
 
-    @PostMapping("/asset-tags/{tagId}/activate")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> reactivateAssetTag(@PathVariable String tagId) {
-        return ResponseEntity.ok(ApiResponse.success("Asset tag reactivated", iiotOperationsService.reactivateAssetTag(tagId)));
+    @PostMapping("/critical-parameters/{parameterId}/activate")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> activateCriticalParameter(@PathVariable String parameterId) {
+        return ResponseEntity.ok(ApiResponse.success("Critical parameter activated", iiotOperationsService.activateCriticalParameter(parameterId)));
     }
 
-    @PostMapping("/tag-thresholds")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> createTagThreshold(@RequestBody Map<String, Object> request) {
+    @PostMapping("/critical-parameter-limits")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> createCriticalParameterLimit(@RequestBody Map<String, Object> request) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Tag threshold created", iiotOperationsService.createTagThreshold(request)));
+                .body(ApiResponse.success("Critical parameter limit created", iiotOperationsService.createCriticalParameterLimit(request)));
     }
 
-    @GetMapping("/tag-thresholds")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getTagThresholds() {
-        return ResponseEntity.ok(ApiResponse.success(iiotOperationsService.getTagThresholds()));
+    @GetMapping("/critical-parameter-limits")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getCriticalParameterLimits() {
+        return ResponseEntity.ok(ApiResponse.success(iiotOperationsService.getCriticalParameterLimits()));
     }
 
-    @GetMapping("/tag-thresholds/{thresholdId}")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getTagThreshold(@PathVariable String thresholdId) {
-        return ResponseEntity.ok(ApiResponse.success(iiotOperationsService.getTagThreshold(thresholdId)));
+    @GetMapping("/critical-parameter-limits/{parameterLimitId}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getCriticalParameterLimit(@PathVariable String parameterLimitId) {
+        return ResponseEntity.ok(ApiResponse.success(iiotOperationsService.getCriticalParameterLimit(parameterLimitId)));
     }
 
-    @PutMapping("/tag-thresholds/{thresholdId}")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> updateTagThreshold(
-            @PathVariable String thresholdId,
+    @PutMapping("/critical-parameter-limits/{parameterLimitId}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> updateCriticalParameterLimit(
+            @PathVariable String parameterLimitId,
             @RequestBody Map<String, Object> request) {
-        return ResponseEntity.ok(ApiResponse.success("Tag threshold updated", iiotOperationsService.updateTagThreshold(thresholdId, request)));
+        return ResponseEntity.ok(ApiResponse.success("Critical parameter limit updated", iiotOperationsService.updateCriticalParameterLimit(parameterLimitId, request)));
     }
 
-    @DeleteMapping("/tag-thresholds/{thresholdId}")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> deleteTagThreshold(@PathVariable String thresholdId) {
-        return ResponseEntity.ok(ApiResponse.success("Tag threshold deleted", iiotOperationsService.deleteTagThreshold(thresholdId)));
+    @DeleteMapping("/critical-parameter-limits/{parameterLimitId}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> deactivateCriticalParameterLimit(@PathVariable String parameterLimitId) {
+        return ResponseEntity.ok(ApiResponse.success("Critical parameter limit deactivated", iiotOperationsService.deactivateCriticalParameterLimit(parameterLimitId)));
     }
 
-    @PostMapping("/tag-thresholds/{thresholdId}/activate")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> reactivateTagThreshold(@PathVariable String thresholdId) {
-        return ResponseEntity.ok(ApiResponse.success("Tag threshold reactivated", iiotOperationsService.reactivateTagThreshold(thresholdId)));
+    @PostMapping("/critical-parameter-limits/{parameterLimitId}/activate")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> activateCriticalParameterLimit(@PathVariable String parameterLimitId) {
+        return ResponseEntity.ok(ApiResponse.success("Critical parameter limit activated", iiotOperationsService.activateCriticalParameterLimit(parameterLimitId)));
+    }
+
+    @PostMapping("/product-master")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> createProductMaster(@RequestBody Map<String, Object> request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Product master created", iiotOperationsService.createProductMaster(request)));
+    }
+
+    @GetMapping("/product-master")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getProductMasters() {
+        return ResponseEntity.ok(ApiResponse.success(iiotOperationsService.getProductMasters()));
+    }
+
+    @GetMapping("/product-master/{productId}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getProductMaster(@PathVariable String productId) {
+        return ResponseEntity.ok(ApiResponse.success(iiotOperationsService.getProductMaster(productId)));
+    }
+
+    @PutMapping("/product-master/{productId}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> updateProductMaster(
+            @PathVariable String productId,
+            @RequestBody Map<String, Object> request) {
+        return ResponseEntity.ok(ApiResponse.success("Product master updated", iiotOperationsService.updateProductMaster(productId, request)));
+    }
+
+    @DeleteMapping("/product-master/{productId}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> deactivateProductMaster(@PathVariable String productId) {
+        return ResponseEntity.ok(ApiResponse.success("Product master deactivated", iiotOperationsService.deactivateProductMaster(productId)));
+    }
+
+    @PostMapping("/product-master/{productId}/activate")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> activateProductMaster(@PathVariable String productId) {
+        return ResponseEntity.ok(ApiResponse.success("Product master activated", iiotOperationsService.activateProductMaster(productId)));
+    }
+
+    @PostMapping("/ingestion/{equipmentId}/trigger")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> triggerBatchIngestion(@PathVariable String equipmentId) {
+        return ResponseEntity.ok(ApiResponse.success("Batch ingestion triggered", iiotOperationsService.triggerBatchIngestion(equipmentId)));
+    }
+
+    @GetMapping("/ingestion/{equipmentId}/status")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getIngestionStatus(
+            @PathVariable String equipmentId,
+            @RequestParam(defaultValue = "BATCH_CPP") String streamType) {
+        return ResponseEntity.ok(ApiResponse.success(iiotOperationsService.getIngestionStatus(equipmentId, streamType)));
+    }
+
+    @GetMapping("/reports/batch-summary")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getBatchSummary(
+            @RequestParam(required = false) String tenantId,
+            @RequestParam(required = false) String plantId,
+            @RequestParam(required = false) String areaId,
+            @RequestParam(required = false) String equipmentId,
+            @RequestParam(required = false) String productName,
+            @RequestParam(required = false) String batchNo,
+            @RequestParam(required = false) String lotNo,
+            @RequestParam(required = false) String fromDate,
+            @RequestParam(required = false) String toDate,
+            @RequestParam(required = false) Integer limit) {
+        Map<String, Object> filter = Map.ofEntries(
+                Map.entry("tenantId", tenantId == null ? "" : tenantId),
+                Map.entry("plantId", plantId == null ? "" : plantId),
+                Map.entry("areaId", areaId == null ? "" : areaId),
+                Map.entry("equipmentId", equipmentId == null ? "" : equipmentId),
+                Map.entry("productName", productName == null ? "" : productName),
+                Map.entry("batchNo", batchNo == null ? "" : batchNo),
+                Map.entry("lotNo", lotNo == null ? "" : lotNo),
+                Map.entry("fromDate", fromDate == null ? "" : fromDate),
+                Map.entry("toDate", toDate == null ? "" : toDate),
+                Map.entry("limit", limit == null ? 500 : limit));
+        return ResponseEntity.ok(ApiResponse.success(iiotOperationsService.getBatchSummary(filter)));
+    }
+
+    @GetMapping("/reports/cpp")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getCppData(
+            @RequestParam(required = false) String tenantId,
+            @RequestParam String equipmentId,
+            @RequestParam(required = false) String productName,
+            @RequestParam(required = false) String batchNo,
+            @RequestParam(required = false) String lotNo,
+            @RequestParam(required = false) String fromDate,
+            @RequestParam(required = false) String toDate,
+            @RequestParam(required = false) Integer limit) {
+        Map<String, Object> filter = Map.ofEntries(
+                Map.entry("tenantId", tenantId == null ? "" : tenantId),
+                Map.entry("equipmentId", equipmentId),
+                Map.entry("productName", productName == null ? "" : productName),
+                Map.entry("batchNo", batchNo == null ? "" : batchNo),
+                Map.entry("lotNo", lotNo == null ? "" : lotNo),
+                Map.entry("fromDate", fromDate == null ? "" : fromDate),
+                Map.entry("toDate", toDate == null ? "" : toDate),
+                Map.entry("limit", limit == null ? 1000 : limit));
+        return ResponseEntity.ok(ApiResponse.success(iiotOperationsService.getCppData(filter)));
+    }
+
+    @GetMapping("/reports/alarm-events")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getAlarmEventData(
+            @RequestParam(required = false) String tenantId,
+            @RequestParam String equipmentId,
+            @RequestParam(required = false) String eventCategory,
+            @RequestParam(required = false) String productName,
+            @RequestParam(required = false) String batchNo,
+            @RequestParam(required = false) String lotNo,
+            @RequestParam(required = false) String fromDate,
+            @RequestParam(required = false) String toDate,
+            @RequestParam(required = false) Integer limit) {
+        Map<String, Object> filter = Map.ofEntries(
+                Map.entry("tenantId", tenantId == null ? "" : tenantId),
+                Map.entry("equipmentId", equipmentId),
+                Map.entry("eventCategory", eventCategory == null ? "" : eventCategory),
+                Map.entry("productName", productName == null ? "" : productName),
+                Map.entry("batchNo", batchNo == null ? "" : batchNo),
+                Map.entry("lotNo", lotNo == null ? "" : lotNo),
+                Map.entry("fromDate", fromDate == null ? "" : fromDate),
+                Map.entry("toDate", toDate == null ? "" : toDate),
+                Map.entry("limit", limit == null ? 1000 : limit));
+        return ResponseEntity.ok(ApiResponse.success(iiotOperationsService.getAlarmEventData(filter)));
     }
 }

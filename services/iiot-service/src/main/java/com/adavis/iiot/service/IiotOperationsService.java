@@ -13,8 +13,15 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -28,6 +35,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Service
@@ -40,6 +48,17 @@ public class IiotOperationsService {
     private static final String ASSETS_COLLECTION = "iiot_assets";
     private static final String ASSET_TAGS_COLLECTION = "iiot_asset_tags";
     private static final String TAG_THRESHOLDS_COLLECTION = "iiot_tag_thresholds";
+    private static final String EQUIPMENT_MASTER_COLLECTION = "iiot_equiment_master";
+    private static final String CRITICAL_PARAMETERS_COLLECTION = "iiot_equipment_critical_parameters";
+    private static final String CRITICAL_PARAMETER_LIMITS_COLLECTION = "iiot_equipment_critical_parameters_limit";
+    private static final String PRODUCT_MASTER_COLLECTION = "iiot_product_master";
+    private static final String SOURCE_MAPPING_COLLECTION = "iiot_source_table_mapping";
+    private static final String CHECKPOINT_COLLECTION = "iiot_ingestion_checkpoint";
+    private static final String JOB_RUN_COLLECTION = "iiot_ingestion_job_run";
+    private static final String EQUIPMENT_LIVE_STATUS_COLLECTION = "iiot_equipment_live_status";
+    private static final String BATCH_SUMMARY_COLLECTION = "iiot_batch_summary";
+    private static final String CPP_TS_PREFIX = "iiot_ts_cpp_";
+    private static final String ALARM_TS_PREFIX = "iiot_ts_alarm_event_";
     private static final String TELEMETRY_COLLECTION = "iiot_telemetry";
     private static final String STATE_COLLECTION = "iiot_asset_states";
     private static final String OEE_CONFIG_COLLECTION = "iiot_oee_config";
@@ -52,6 +71,17 @@ public class IiotOperationsService {
     private final MongoTemplate mongoTemplate;
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
+
+    @Value("${iiot.ingestion.source-db.url:}")
+    private String sourceDbUrl;
+
+    @Value("${iiot.ingestion.source-db.username:}")
+    private String sourceDbUsername;
+
+    @Value("${iiot.ingestion.source-db.password:}")
+    private String sourceDbPassword;
+
+    private final Map<String, Instant> lastRunAtByStream = new ConcurrentHashMap<>();
 
     public Map<String, Object> createAsset(Map<String, Object> request) {
         String assetId = requireText(request, "assetId");
@@ -224,6 +254,917 @@ public class IiotOperationsService {
 
     public Map<String, Object> reactivateTagThreshold(String thresholdId) {
         return reactivateDocumentByBusinessKey(TAG_THRESHOLDS_COLLECTION, "thresholdId", thresholdId);
+    }
+
+    public Map<String, Object> createEquipmentMaster(Map<String, Object> request) {
+        String equipmentId = requireText(request, "equipmentId");
+        String equipmentCode = requireText(request, "equipmentCode");
+        String tenantId = firstNonBlank(stringValue(request.get("tenantId")), DEFAULT_TENANT_ID);
+        String plantId = firstNonBlank(stringValue(request.get("plantId")), DEFAULT_PLANT_ID);
+
+        Query query = new Query(new Criteria().orOperator(
+                Criteria.where("equipmentId").is(equipmentId),
+                Criteria.where("tenantId").is(tenantId).and("plantId").is(plantId).and("equipmentCode").is(equipmentCode)));
+        if (mongoTemplate.findOne(query, Document.class, EQUIPMENT_MASTER_COLLECTION) != null) {
+            throw new BusinessException("Equipment master already exists: " + equipmentCode);
+        }
+
+        Document doc = new Document(request);
+        doc.put("equipmentId", equipmentId);
+        doc.put("equipmentCode", equipmentCode);
+        doc.put("tenantId", tenantId);
+        doc.put("plantId", plantId);
+        doc.put("isActive", request.getOrDefault("isActive", true));
+        doc.put("createdAt", Date.from(Instant.now()));
+        doc.put("updatedAt", Date.from(Instant.now()));
+        return insertDocument(doc, EQUIPMENT_MASTER_COLLECTION, "Equipment master already exists: " + equipmentCode);
+    }
+
+    public List<Map<String, Object>> getEquipmentMasters() {
+        Query query = new Query(new Criteria().orOperator(
+                Criteria.where("isActive").exists(false),
+                Criteria.where("isActive").is(true)));
+        query.with(Sort.by(Sort.Direction.ASC, "equipmentId", "equipmentCode"));
+        return mongoTemplate.find(query, Document.class, EQUIPMENT_MASTER_COLLECTION).stream().map(this::toMap).toList();
+    }
+
+    public Map<String, Object> getEquipmentMaster(String equipmentId) {
+        return toMap(requireActiveDocumentByBusinessKey(EQUIPMENT_MASTER_COLLECTION, "equipmentId", equipmentId));
+    }
+
+    public Map<String, Object> updateEquipmentMaster(String equipmentId, Map<String, Object> request) {
+        Document existing = requireActiveDocumentByBusinessKey(EQUIPMENT_MASTER_COLLECTION, "equipmentId", equipmentId);
+        request.forEach((k, v) -> {
+            if (!"_id".equals(k) && !"equipmentId".equals(k)) {
+                existing.put(k, v);
+            }
+        });
+        existing.put("updatedAt", Date.from(Instant.now()));
+        return toMap(mongoTemplate.save(existing, EQUIPMENT_MASTER_COLLECTION));
+    }
+
+    public Map<String, Object> deactivateEquipmentMaster(String equipmentId) {
+        Document existing = requireActiveDocumentByBusinessKey(EQUIPMENT_MASTER_COLLECTION, "equipmentId", equipmentId);
+        existing.put("isActive", false);
+        existing.put("updatedAt", Date.from(Instant.now()));
+        return toMap(mongoTemplate.save(existing, EQUIPMENT_MASTER_COLLECTION));
+    }
+
+    public Map<String, Object> activateEquipmentMaster(String equipmentId) {
+        return reactivateDocumentByBusinessKey(EQUIPMENT_MASTER_COLLECTION, "equipmentId", equipmentId);
+    }
+
+    public Map<String, Object> createCriticalParameter(Map<String, Object> request) {
+        String parameterId = requireText(request, "parameterId");
+        String equipmentId = requireText(request, "equipmentId");
+        String parameterCode = requireText(request, "parameterCode");
+        String tenantId = firstNonBlank(stringValue(request.get("tenantId")), DEFAULT_TENANT_ID);
+        String plantId = firstNonBlank(stringValue(request.get("plantId")), DEFAULT_PLANT_ID);
+
+        Query query = new Query(new Criteria().orOperator(
+                Criteria.where("parameterId").is(parameterId),
+                Criteria.where("tenantId").is(tenantId)
+                        .and("plantId").is(plantId)
+                        .and("equipmentId").is(equipmentId)
+                        .and("parameterCode").is(parameterCode)));
+        if (mongoTemplate.findOne(query, Document.class, CRITICAL_PARAMETERS_COLLECTION) != null) {
+            throw new BusinessException("Critical parameter already exists: " + parameterCode);
+        }
+
+        Document doc = new Document(request);
+        doc.put("parameterId", parameterId);
+        doc.put("equipmentId", equipmentId);
+        doc.put("parameterCode", parameterCode);
+        doc.put("tenantId", tenantId);
+        doc.put("plantId", plantId);
+        doc.put("isActive", request.getOrDefault("isActive", true));
+        doc.put("createdAt", Date.from(Instant.now()));
+        doc.put("updatedAt", Date.from(Instant.now()));
+        return insertDocument(doc, CRITICAL_PARAMETERS_COLLECTION, "Critical parameter already exists: " + parameterCode);
+    }
+
+    public List<Map<String, Object>> getCriticalParameters() {
+        Query query = new Query(new Criteria().orOperator(
+                Criteria.where("isActive").exists(false),
+                Criteria.where("isActive").is(true)));
+        query.with(Sort.by(Sort.Direction.ASC, "parameterId", "parameterCode"));
+        return mongoTemplate.find(query, Document.class, CRITICAL_PARAMETERS_COLLECTION).stream().map(this::toMap).toList();
+    }
+
+    public Map<String, Object> getCriticalParameter(String parameterId) {
+        return toMap(requireActiveDocumentByBusinessKey(CRITICAL_PARAMETERS_COLLECTION, "parameterId", parameterId));
+    }
+
+    public Map<String, Object> updateCriticalParameter(String parameterId, Map<String, Object> request) {
+        Document existing = requireActiveDocumentByBusinessKey(CRITICAL_PARAMETERS_COLLECTION, "parameterId", parameterId);
+        request.forEach((k, v) -> {
+            if (!"_id".equals(k) && !"parameterId".equals(k)) {
+                existing.put(k, v);
+            }
+        });
+        existing.put("updatedAt", Date.from(Instant.now()));
+        return toMap(mongoTemplate.save(existing, CRITICAL_PARAMETERS_COLLECTION));
+    }
+
+    public Map<String, Object> deactivateCriticalParameter(String parameterId) {
+        Document existing = requireActiveDocumentByBusinessKey(CRITICAL_PARAMETERS_COLLECTION, "parameterId", parameterId);
+        existing.put("isActive", false);
+        existing.put("updatedAt", Date.from(Instant.now()));
+        return toMap(mongoTemplate.save(existing, CRITICAL_PARAMETERS_COLLECTION));
+    }
+
+    public Map<String, Object> activateCriticalParameter(String parameterId) {
+        return reactivateDocumentByBusinessKey(CRITICAL_PARAMETERS_COLLECTION, "parameterId", parameterId);
+    }
+
+    public Map<String, Object> createCriticalParameterLimit(Map<String, Object> request) {
+        String parameterLimitId = requireText(request, "parameterLimitId");
+        String parameterId = requireText(request, "parameterId");
+        String equipmentId = requireText(request, "equipmentId");
+        String tenantId = firstNonBlank(stringValue(request.get("tenantId")), DEFAULT_TENANT_ID);
+        String plantId = firstNonBlank(stringValue(request.get("plantId")), DEFAULT_PLANT_ID);
+
+        Query query = new Query(new Criteria().orOperator(
+                Criteria.where("parameterLimitId").is(parameterLimitId),
+                Criteria.where("tenantId").is(tenantId)
+                        .and("plantId").is(plantId)
+                        .and("equipmentId").is(equipmentId)
+                        .and("parameterId").is(parameterId)));
+        if (mongoTemplate.findOne(query, Document.class, CRITICAL_PARAMETER_LIMITS_COLLECTION) != null) {
+            throw new BusinessException("Critical parameter limit already exists: " + parameterLimitId);
+        }
+
+        Document doc = new Document(request);
+        doc.put("parameterLimitId", parameterLimitId);
+        doc.put("parameterId", parameterId);
+        doc.put("equipmentId", equipmentId);
+        doc.put("tenantId", tenantId);
+        doc.put("plantId", plantId);
+        doc.put("isActive", request.getOrDefault("isActive", true));
+        doc.put("createdAt", Date.from(Instant.now()));
+        doc.put("updatedAt", Date.from(Instant.now()));
+        return insertDocument(doc, CRITICAL_PARAMETER_LIMITS_COLLECTION,
+                "Critical parameter limit already exists: " + parameterLimitId);
+    }
+
+    public List<Map<String, Object>> getCriticalParameterLimits() {
+        Query query = new Query(new Criteria().orOperator(
+                Criteria.where("isActive").exists(false),
+                Criteria.where("isActive").is(true)));
+        query.with(Sort.by(Sort.Direction.ASC, "parameterLimitId"));
+        return mongoTemplate.find(query, Document.class, CRITICAL_PARAMETER_LIMITS_COLLECTION).stream().map(this::toMap).toList();
+    }
+
+    public Map<String, Object> getCriticalParameterLimit(String parameterLimitId) {
+        return toMap(requireActiveDocumentByBusinessKey(CRITICAL_PARAMETER_LIMITS_COLLECTION, "parameterLimitId", parameterLimitId));
+    }
+
+    public Map<String, Object> updateCriticalParameterLimit(String parameterLimitId, Map<String, Object> request) {
+        Document existing = requireActiveDocumentByBusinessKey(CRITICAL_PARAMETER_LIMITS_COLLECTION, "parameterLimitId", parameterLimitId);
+        request.forEach((k, v) -> {
+            if (!"_id".equals(k) && !"parameterLimitId".equals(k)) {
+                existing.put(k, v);
+            }
+        });
+        existing.put("updatedAt", Date.from(Instant.now()));
+        return toMap(mongoTemplate.save(existing, CRITICAL_PARAMETER_LIMITS_COLLECTION));
+    }
+
+    public Map<String, Object> deactivateCriticalParameterLimit(String parameterLimitId) {
+        Document existing = requireActiveDocumentByBusinessKey(CRITICAL_PARAMETER_LIMITS_COLLECTION, "parameterLimitId", parameterLimitId);
+        existing.put("isActive", false);
+        existing.put("updatedAt", Date.from(Instant.now()));
+        return toMap(mongoTemplate.save(existing, CRITICAL_PARAMETER_LIMITS_COLLECTION));
+    }
+
+    public Map<String, Object> activateCriticalParameterLimit(String parameterLimitId) {
+        return reactivateDocumentByBusinessKey(CRITICAL_PARAMETER_LIMITS_COLLECTION, "parameterLimitId", parameterLimitId);
+    }
+
+    public Map<String, Object> createProductMaster(Map<String, Object> request) {
+        String productId = requireText(request, "productId");
+        String productCode = requireText(request, "productCode");
+        String tenantId = firstNonBlank(stringValue(request.get("tenantId")), DEFAULT_TENANT_ID);
+        String plantId = firstNonBlank(stringValue(request.get("plantId")), DEFAULT_PLANT_ID);
+
+        Query query = new Query(new Criteria().orOperator(
+                Criteria.where("productId").is(productId),
+                Criteria.where("tenantId").is(tenantId).and("plantId").is(plantId).and("productCode").is(productCode)));
+        if (mongoTemplate.findOne(query, Document.class, PRODUCT_MASTER_COLLECTION) != null) {
+            throw new BusinessException("Product master already exists: " + productCode);
+        }
+
+        Document doc = new Document(request);
+        doc.put("productId", productId);
+        doc.put("productCode", productCode);
+        doc.put("tenantId", tenantId);
+        doc.put("plantId", plantId);
+        doc.put("isActive", request.getOrDefault("isActive", true));
+        doc.put("createdAt", Date.from(Instant.now()));
+        doc.put("updatedAt", Date.from(Instant.now()));
+        return insertDocument(doc, PRODUCT_MASTER_COLLECTION, "Product master already exists: " + productCode);
+    }
+
+    public List<Map<String, Object>> getProductMasters() {
+        Query query = new Query(new Criteria().orOperator(
+                Criteria.where("isActive").exists(false),
+                Criteria.where("isActive").is(true)));
+        query.with(Sort.by(Sort.Direction.ASC, "productId", "productCode"));
+        return mongoTemplate.find(query, Document.class, PRODUCT_MASTER_COLLECTION).stream().map(this::toMap).toList();
+    }
+
+    public Map<String, Object> getProductMaster(String productId) {
+        return toMap(requireActiveDocumentByBusinessKey(PRODUCT_MASTER_COLLECTION, "productId", productId));
+    }
+
+    public Map<String, Object> updateProductMaster(String productId, Map<String, Object> request) {
+        Document existing = requireActiveDocumentByBusinessKey(PRODUCT_MASTER_COLLECTION, "productId", productId);
+        request.forEach((k, v) -> {
+            if (!"_id".equals(k) && !"productId".equals(k)) {
+                existing.put(k, v);
+            }
+        });
+        existing.put("updatedAt", Date.from(Instant.now()));
+        return toMap(mongoTemplate.save(existing, PRODUCT_MASTER_COLLECTION));
+    }
+
+    public Map<String, Object> deactivateProductMaster(String productId) {
+        Document existing = requireActiveDocumentByBusinessKey(PRODUCT_MASTER_COLLECTION, "productId", productId);
+        existing.put("isActive", false);
+        existing.put("updatedAt", Date.from(Instant.now()));
+        return toMap(mongoTemplate.save(existing, PRODUCT_MASTER_COLLECTION));
+    }
+
+    public Map<String, Object> activateProductMaster(String productId) {
+        return reactivateDocumentByBusinessKey(PRODUCT_MASTER_COLLECTION, "productId", productId);
+    }
+
+    @Scheduled(fixedDelayString = "${iiot.ingestion.scheduler-delay-ms:15000}")
+    public void runScheduledBatchIngestion() {
+        Query mappingQuery = new Query(Criteria.where("isActive").is(true));
+        List<Document> mappings = mongoTemplate.find(mappingQuery, Document.class, SOURCE_MAPPING_COLLECTION);
+        for (Document mapping : mappings) {
+            try {
+                ingestEquipmentStreams(mapping);
+            } catch (Exception ex) {
+                log.error("IIOT batch ingestion failed for mapping {}: {}", mapping.get("mappingId"), ex.getMessage(), ex);
+            }
+        }
+    }
+
+    public Map<String, Object> triggerBatchIngestion(String equipmentId) {
+        Query query = new Query(Criteria.where("equipmentId").is(equipmentId).and("isActive").is(true));
+        Document mapping = mongoTemplate.findOne(query, Document.class, SOURCE_MAPPING_COLLECTION);
+        if (mapping == null) {
+            throw new BusinessException("Active source mapping not found for equipmentId: " + equipmentId);
+        }
+        ingestEquipmentStreams(mapping);
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("equipmentId", equipmentId);
+        response.put("status", "TRIGGERED");
+        response.put("updatedAt", Instant.now().toString());
+        return response;
+    }
+
+    public List<Map<String, Object>> getBatchSummary(Map<String, Object> filter) {
+        Query query = new Query();
+        applyEqualsCriteria(query, filter, "tenantId");
+        applyEqualsCriteria(query, filter, "plantId");
+        applyEqualsCriteria(query, filter, "areaId");
+        applyEqualsCriteria(query, filter, "equipmentId");
+        applyEqualsCriteria(query, filter, "productName");
+        applyEqualsCriteria(query, filter, "batchNo");
+        applyEqualsCriteria(query, filter, "lotNo");
+        applyDateRangeCriteria(query, filter, "batchStartAt", "fromDate", "toDate");
+        query.with(Sort.by(Sort.Direction.DESC, "batchStartAt", "updatedAt"));
+        int limit = toInteger(filter.get("limit"), 500, 5000);
+        query.limit(limit);
+        return mongoTemplate.find(query, Document.class, BATCH_SUMMARY_COLLECTION).stream().map(this::toMap).toList();
+    }
+
+    public List<Map<String, Object>> getCppData(Map<String, Object> filter) {
+        String tenantId = firstNonBlank(stringValue(filter.get("tenantId")), DEFAULT_TENANT_ID);
+        String equipmentId = requireFilterText(filter, "equipmentId");
+        String collection = buildPerEquipmentCollectionName(CPP_TS_PREFIX, tenantId, equipmentId);
+        Query query = new Query();
+        applyMetaCriteria(query, "meta.tenantId", tenantId);
+        applyMetaCriteria(query, "meta.equipmentId", equipmentId);
+        applyMetaCriteria(query, "meta.batchNo", stringValue(filter.get("batchNo")));
+        applyMetaCriteria(query, "meta.lotNo", stringValue(filter.get("lotNo")));
+        applyMetaCriteria(query, "meta.productName", stringValue(filter.get("productName")));
+        applyDateRangeCriteria(query, filter, "observedAt", "fromDate", "toDate");
+        int limit = toInteger(filter.get("limit"), 1000, 10000);
+        query.with(Sort.by(Sort.Direction.DESC, "observedAt")).limit(limit);
+        return mongoTemplate.find(query, Document.class, collection).stream().map(this::toMap).toList();
+    }
+
+    public List<Map<String, Object>> getAlarmEventData(Map<String, Object> filter) {
+        String tenantId = firstNonBlank(stringValue(filter.get("tenantId")), DEFAULT_TENANT_ID);
+        String equipmentId = requireFilterText(filter, "equipmentId");
+        String collection = buildPerEquipmentCollectionName(ALARM_TS_PREFIX, tenantId, equipmentId);
+        Query query = new Query();
+        applyMetaCriteria(query, "meta.tenantId", tenantId);
+        applyMetaCriteria(query, "meta.equipmentId", equipmentId);
+        applyMetaCriteria(query, "meta.batchNo", stringValue(filter.get("batchNo")));
+        applyMetaCriteria(query, "meta.lotNo", stringValue(filter.get("lotNo")));
+        applyMetaCriteria(query, "meta.productName", stringValue(filter.get("productName")));
+        String category = stringValue(filter.get("eventCategory"));
+        if (category != null && !category.isBlank()) {
+            query.addCriteria(Criteria.where("event.eventCategory").is(category.toUpperCase(Locale.ROOT)));
+        }
+        applyDateRangeCriteria(query, filter, "eventAt", "fromDate", "toDate");
+        int limit = toInteger(filter.get("limit"), 1000, 10000);
+        query.with(Sort.by(Sort.Direction.DESC, "eventAt")).limit(limit);
+        return mongoTemplate.find(query, Document.class, collection).stream().map(this::toMap).toList();
+    }
+
+    public Map<String, Object> getIngestionStatus(String equipmentId, String streamType) {
+        String normalizedStream = normalizeStreamType(streamType);
+        Document checkpoint = findCheckpoint(firstNonBlank(equipmentId, "ALL"), normalizedStream,
+                firstNonBlank(stringValue(null), DEFAULT_TENANT_ID));
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("equipmentId", equipmentId);
+        response.put("streamType", normalizedStream);
+        response.put("checkpoint", checkpoint == null ? null : toMap(checkpoint));
+        String runKey = equipmentId + "|" + normalizedStream;
+        Instant lastRun = lastRunAtByStream.get(runKey);
+        response.put("lastRunAt", lastRun == null ? null : lastRun.toString());
+        return response;
+    }
+
+    private void ingestEquipmentStreams(Document mapping) {
+        String tenantId = firstNonBlank(stringValue(mapping.get("tenantId")), DEFAULT_TENANT_ID);
+        String equipmentId = requireText(toMap(mapping), "equipmentId");
+        int pollInterval = toInteger(mapping.get("pollIntervalSeconds"), 30, 86400);
+        ingestForStream(mapping, tenantId, equipmentId, "BATCH_CPP", pollInterval);
+        ingestForStream(mapping, tenantId, equipmentId, "ALARM_EVENT", pollInterval);
+    }
+
+    private void ingestForStream(Document mapping, String tenantId, String equipmentId, String streamType, int pollIntervalSeconds) {
+        String runKey = equipmentId + "|" + streamType;
+        Instant now = Instant.now();
+        Instant lastRun = lastRunAtByStream.get(runKey);
+        if (lastRun != null && Duration.between(lastRun, now).getSeconds() < pollIntervalSeconds) {
+            return;
+        }
+
+        Map<String, Object> sourceConfig = asMap("BATCH_CPP".equals(streamType)
+                ? mapping.get("batchSource")
+                : mapping.get("alarmEventSource"));
+        if (sourceConfig.isEmpty()) {
+            return;
+        }
+
+        int batchSize = toInteger(mapping.get("batchSize"), 1000, 10000);
+        String sourceTable = requireFilterText(sourceConfig, "tableName");
+        String sequenceColumn = requireFilterText(sourceConfig, "sequenceColumn");
+        String timestampColumn = requireFilterText(sourceConfig, "timestampColumn");
+        String sql = "SELECT * FROM " + sourceTable + " WHERE " + sequenceColumn + " > ? ORDER BY " + sequenceColumn + " ASC";
+
+        Document checkpoint = findCheckpoint(equipmentId, streamType, tenantId);
+        long lastSeq = checkpoint == null ? 0L : toLong(checkpoint.get("lastProcessedSeqId"));
+
+        List<Map<String, Object>> rows = fetchSourceRows(mapping, sql, lastSeq, batchSize);
+        long maxSeq = lastSeq;
+        int written = 0;
+        int skipped = 0;
+        Instant startedAt = Instant.now();
+        String targetCollection = buildPerEquipmentCollectionName(
+                "BATCH_CPP".equals(streamType) ? CPP_TS_PREFIX : ALARM_TS_PREFIX,
+                tenantId,
+                equipmentId);
+
+        ensureSimpleIndex(targetCollection, "source.tableName", "source.sourceSeqId");
+
+        for (Map<String, Object> row : rows) {
+            Long rowSeq = toLongNullable(row.get(sequenceColumn));
+            if (rowSeq == null) {
+                skipped++;
+                continue;
+            }
+
+            Map<String, Object> tsDoc = "BATCH_CPP".equals(streamType)
+                    ? buildCppDoc(tenantId, equipmentId, sourceTable, sequenceColumn, timestampColumn, row)
+                    : buildAlarmEventDocs(tenantId, equipmentId, sourceTable, sequenceColumn, timestampColumn, row).stream().findFirst().orElse(null);
+            if (tsDoc == null) {
+                skipped++;
+                continue;
+            }
+
+            try {
+                mongoTemplate.insert(new Document(tsDoc), targetCollection);
+                written++;
+                maxSeq = Math.max(maxSeq, rowSeq);
+                if ("BATCH_CPP".equals(streamType)) {
+                    upsertBatchSummaryFromCpp(tsDoc);
+                }
+                upsertEquipmentLiveStatusFromTs(tsDoc, streamType);
+            } catch (MongoWriteException ex) {
+                if (ex.getError() != null && ex.getError().getCode() == 11000) {
+                    skipped++;
+                    maxSeq = Math.max(maxSeq, rowSeq);
+                    continue;
+                }
+                throw ex;
+            }
+        }
+
+        upsertCheckpoint(tenantId, equipmentId, streamType, sourceTable, maxSeq, rows.isEmpty() ? "NO_DATA" : "SUCCESS");
+        writeJobRun(tenantId, equipmentId, streamType, lastSeq, maxSeq, rows.size(), written, skipped, startedAt, Instant.now(), null);
+        lastRunAtByStream.put(runKey, now);
+    }
+
+    private List<Map<String, Object>> fetchSourceRows(Document mapping, String sql, long lastSeq, int batchSize) {
+        Map<String, Object> sourceConfig = asMap(mapping.get("batchSource"));
+        if (sql.contains("AE_") || sql.contains("alarm") || sql.contains("ALARM")) {
+            sourceConfig = asMap(mapping.get("alarmEventSource"));
+        }
+        String connectionRef = firstNonBlank(stringValue(mapping.get("connectionRef")), stringValue(sourceConfig.get("connectionRef")));
+        Map<String, Object> connection = resolveConnectionConfig(connectionRef, sourceConfig);
+
+        String url = requireFilterText(connection, "url");
+        String username = stringValue(connection.get("username"));
+        String password = stringValue(connection.get("password"));
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        try (Connection conn = DriverManager.getConnection(url, username, password);
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, lastSeq);
+            ps.setMaxRows(batchSize);
+            try (ResultSet rs = ps.executeQuery()) {
+                ResultSetMetaData meta = rs.getMetaData();
+                int columns = meta.getColumnCount();
+                while (rs.next()) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    for (int i = 1; i <= columns; i++) {
+                        row.put(meta.getColumnLabel(i), rs.getObject(i));
+                    }
+                    rows.add(row);
+                }
+            }
+        } catch (Exception ex) {
+            throw new BusinessException("Source DB fetch failed: " + ex.getMessage());
+        }
+        return rows;
+    }
+
+    private Map<String, Object> resolveConnectionConfig(String connectionRef, Map<String, Object> sourceConfig) {
+        if (connectionRef != null && !connectionRef.isBlank()) {
+            Query query = new Query(Criteria.where("connectionRef").is(connectionRef));
+            Document found = mongoTemplate.findOne(query, Document.class, SOURCE_MAPPING_COLLECTION);
+            if (found != null && found.get("connection") instanceof Document connDoc) {
+                return toMap(connDoc);
+            }
+        }
+        Map<String, Object> connection = asMap(sourceConfig.get("connection"));
+        if (!connection.isEmpty()) {
+            return connection;
+        }
+        Map<String, Object> fallback = new LinkedHashMap<>();
+        fallback.put("url", firstNonBlank(sourceDbUrl, System.getenv("IIOT_SOURCE_DB_URL")));
+        fallback.put("username", firstNonBlank(sourceDbUsername, System.getenv("IIOT_SOURCE_DB_USERNAME")));
+        fallback.put("password", firstNonBlank(sourceDbPassword, System.getenv("IIOT_SOURCE_DB_PASSWORD")));
+        return fallback;
+    }
+
+    private Map<String, Object> buildCppDoc(String tenantId,
+                                            String equipmentId,
+                                            String sourceTable,
+                                            String sequenceColumn,
+                                            String timestampColumn,
+                                            Map<String, Object> row) {
+        Instant observedAt = parseInstant(row.get(timestampColumn));
+        Long sourceSeqId = toLongNullable(row.get(sequenceColumn));
+        if (sourceSeqId == null) {
+            return null;
+        }
+
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("tenantId", tenantId);
+        meta.put("equipmentId", equipmentId);
+        meta.put("plantId", firstNonBlank(stringValue(row.get("PlantId")), stringValue(row.get("Plant_ID"))));
+        meta.put("areaId", firstNonBlank(stringValue(row.get("AreaId")), stringValue(row.get("Area_ID"))));
+        meta.put("blockId", firstNonBlank(stringValue(row.get("BlockId")), stringValue(row.get("Block_ID"))));
+        meta.put("roomId", firstNonBlank(stringValue(row.get("RoomId")), stringValue(row.get("Room_ID"))));
+        meta.put("batchNo", firstNonBlank(stringValue(row.get("Batch_Number")), stringValue(row.get("BatchNo"))));
+        meta.put("lotNo", firstNonBlank(stringValue(row.get("LotNumber")), stringValue(row.get("Lot_No"))));
+        meta.put("productName", firstNonBlank(stringValue(row.get("Product_Name")), stringValue(row.get("ProductName"))));
+        meta.put("operatorName", firstNonBlank(stringValue(row.get("Operator_Name")), stringValue(row.get("OperatorName"))));
+        meta.put("status", stringValue(row.get("Status")));
+
+        Map<String, Object> source = new LinkedHashMap<>();
+        source.put("tableName", sourceTable);
+        source.put("sourceSeqId", sourceSeqId);
+        source.put("lastModifiedTime", observedAt.toString());
+        source.put("machineDate", stringValue(row.get("MachineDate")));
+
+        Map<String, Object> metrics = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : row.entrySet()) {
+            String key = entry.getKey();
+            if (isCppMetaField(key, sequenceColumn, timestampColumn)) {
+                continue;
+            }
+            metrics.put(toCamelCaseKey(key), normalizeSourceValue(entry.getValue()));
+        }
+
+        Map<String, Object> doc = new LinkedHashMap<>();
+        doc.put("observedAt", observedAt.toString());
+        doc.put("meta", meta);
+        doc.put("source", source);
+        doc.put("metrics", metrics);
+        doc.put("ingestedAt", Instant.now().toString());
+        return doc;
+    }
+
+    private List<Map<String, Object>> buildAlarmEventDocs(String tenantId,
+                                                          String equipmentId,
+                                                          String sourceTable,
+                                                          String sequenceColumn,
+                                                          String timestampColumn,
+                                                          Map<String, Object> row) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        Instant eventAt = parseInstant(row.get(timestampColumn));
+        Long sourceSeqId = toLongNullable(row.get(sequenceColumn));
+        if (sourceSeqId == null) {
+            return result;
+        }
+
+        Map<String, Object> baseMeta = new LinkedHashMap<>();
+        baseMeta.put("tenantId", tenantId);
+        baseMeta.put("equipmentId", equipmentId);
+        baseMeta.put("batchNo", firstNonBlank(stringValue(row.get("Batch_Number")), stringValue(row.get("BatchNo"))));
+        baseMeta.put("lotNo", firstNonBlank(stringValue(row.get("LotNumber")), stringValue(row.get("Lot_No"))));
+        baseMeta.put("productName", firstNonBlank(stringValue(row.get("Product_Name")), stringValue(row.get("ProductName"))));
+        baseMeta.put("status", stringValue(row.get("Status")));
+
+        Map<String, Object> source = new LinkedHashMap<>();
+        source.put("tableName", sourceTable);
+        source.put("sourceSeqId", sourceSeqId);
+        source.put("lastModifiedTime", eventAt.toString());
+
+        appendAlarmOrEvent(result, baseMeta, source, eventAt, row, "Alarm_All", "ALARM");
+        appendAlarmOrEvent(result, baseMeta, source, eventAt, row, "Event_All", "EVENT");
+        return result;
+    }
+
+    private void appendAlarmOrEvent(List<Map<String, Object>> result,
+                                    Map<String, Object> meta,
+                                    Map<String, Object> source,
+                                    Instant eventAt,
+                                    Map<String, Object> row,
+                                    String sourceColumn,
+                                    String category) {
+        String payload = stringValue(row.get(sourceColumn));
+        if (payload == null || payload.isBlank()) {
+            return;
+        }
+        String[] split = payload.split(";");
+        for (String raw : split) {
+            String text = raw == null ? "" : raw.trim();
+            if (text.isBlank()) {
+                continue;
+            }
+            Map<String, Object> event = new LinkedHashMap<>();
+            event.put("eventCategory", category);
+            event.put("eventCode", toEventCode(text));
+            event.put("eventText", text);
+            event.put("severity", "ALARM".equals(category) ? "HIGH" : "INFO");
+            event.put("eventState", "OPEN");
+
+            Map<String, Object> doc = new LinkedHashMap<>();
+            doc.put("eventAt", eventAt.toString());
+            doc.put("meta", new LinkedHashMap<>(meta));
+            doc.put("source", new LinkedHashMap<>(source));
+            doc.put("event", event);
+            doc.put("ingestedAt", Instant.now().toString());
+            result.add(doc);
+        }
+    }
+
+    private void upsertCheckpoint(String tenantId,
+                                  String equipmentId,
+                                  String streamType,
+                                  String sourceTable,
+                                  long lastProcessedSeqId,
+                                  String status) {
+        Query query = new Query(Criteria.where("tenantId").is(tenantId)
+                .and("equipmentId").is(equipmentId)
+                .and("streamType").is(streamType));
+        Document doc = mongoTemplate.findOne(query, Document.class, CHECKPOINT_COLLECTION);
+        if (doc == null) {
+            doc = new Document();
+            doc.put("checkpointId", "CP-" + tenantId + "-" + equipmentId + "-" + streamType);
+            doc.put("tenantId", tenantId);
+            doc.put("equipmentId", equipmentId);
+            doc.put("streamType", streamType);
+            doc.put("createdAt", Date.from(Instant.now()));
+        }
+        doc.put("sourceTable", sourceTable);
+        doc.put("lastProcessedSeqId", lastProcessedSeqId);
+        doc.put("lastProcessedAt", Date.from(Instant.now()));
+        doc.put("status", status);
+        doc.put("updatedAt", Date.from(Instant.now()));
+        mongoTemplate.save(doc, CHECKPOINT_COLLECTION);
+    }
+
+    private void writeJobRun(String tenantId,
+                             String equipmentId,
+                             String streamType,
+                             long windowStartSeqId,
+                             long windowEndSeqId,
+                             int recordsRead,
+                             int recordsWritten,
+                             int recordsSkipped,
+                             Instant startedAt,
+                             Instant completedAt,
+                             String errorSummary) {
+        Document doc = new Document();
+        doc.put("jobRunId", "JOB-" + Instant.now().toEpochMilli());
+        doc.put("tenantId", tenantId);
+        doc.put("equipmentId", equipmentId);
+        doc.put("streamType", streamType);
+        doc.put("windowStartSeqId", windowStartSeqId);
+        doc.put("windowEndSeqId", windowEndSeqId);
+        doc.put("recordsRead", recordsRead);
+        doc.put("recordsWritten", recordsWritten);
+        doc.put("recordsSkipped", recordsSkipped);
+        doc.put("status", errorSummary == null ? "SUCCESS" : "FAILED");
+        doc.put("errorSummary", errorSummary);
+        doc.put("startedAt", Date.from(startedAt));
+        doc.put("completedAt", Date.from(completedAt));
+        doc.put("createdAt", Date.from(Instant.now()));
+        doc.put("updatedAt", Date.from(Instant.now()));
+        mongoTemplate.insert(doc, JOB_RUN_COLLECTION);
+    }
+
+    private void upsertEquipmentLiveStatusFromTs(Map<String, Object> tsDoc, String streamType) {
+        Map<String, Object> meta = asMap(tsDoc.get("meta"));
+        String tenantId = firstNonBlank(stringValue(meta.get("tenantId")), DEFAULT_TENANT_ID);
+        String equipmentId = stringValue(meta.get("equipmentId"));
+        if (equipmentId == null || equipmentId.isBlank()) {
+            return;
+        }
+
+        Query query = new Query(Criteria.where("tenantId").is(tenantId).and("equipmentId").is(equipmentId));
+        Document current = mongoTemplate.findOne(query, Document.class, EQUIPMENT_LIVE_STATUS_COLLECTION);
+        Document doc = current == null ? new Document() : current;
+        doc.put("tenantId", tenantId);
+        doc.put("equipmentId", equipmentId);
+        doc.put("plantId", meta.get("plantId"));
+        doc.put("areaId", meta.get("areaId"));
+        doc.put("lastBatchNo", meta.get("batchNo"));
+        doc.put("lastLotNo", meta.get("lotNo"));
+        doc.put("lastEventAt", tsDoc.get("observedAt") != null ? tsDoc.get("observedAt") : tsDoc.get("eventAt"));
+        if ("BATCH_CPP".equals(streamType)) {
+            String status = stringValue(meta.get("status"));
+            doc.put("currentState", firstNonBlank(status, "UNKNOWN"));
+            doc.put("stateReason", stringValue(meta.get("status")));
+        }
+        Map<String, Object> source = asMap(tsDoc.get("source"));
+        doc.put("lastSourceSeqId", source.get("sourceSeqId"));
+        doc.put("heartbeatAt", Instant.now().toString());
+        doc.put("updatedAt", Date.from(Instant.now()));
+        if (!doc.containsKey("createdAt")) {
+            doc.put("createdAt", Date.from(Instant.now()));
+        }
+        mongoTemplate.save(doc, EQUIPMENT_LIVE_STATUS_COLLECTION);
+    }
+
+    private void upsertBatchSummaryFromCpp(Map<String, Object> cppDoc) {
+        Map<String, Object> meta = asMap(cppDoc.get("meta"));
+        String tenantId = firstNonBlank(stringValue(meta.get("tenantId")), DEFAULT_TENANT_ID);
+        String equipmentId = stringValue(meta.get("equipmentId"));
+        String batchNo = stringValue(meta.get("batchNo"));
+        if (equipmentId == null || batchNo == null || batchNo.isBlank()) {
+            return;
+        }
+
+        Query query = new Query(Criteria.where("tenantId").is(tenantId)
+                .and("equipmentId").is(equipmentId)
+                .and("batchNo").is(batchNo));
+        Document summary = mongoTemplate.findOne(query, Document.class, BATCH_SUMMARY_COLLECTION);
+        if (summary == null) {
+            summary = new Document();
+            summary.put("tenantId", tenantId);
+            summary.put("equipmentId", equipmentId);
+            summary.put("batchNo", batchNo);
+            summary.put("cppRecordCount", 0);
+            summary.put("alarmCount", 0);
+            summary.put("eventCount", 0);
+            summary.put("createdAt", Date.from(Instant.now()));
+        }
+
+        summary.put("lotNo", meta.get("lotNo"));
+        summary.put("productName", meta.get("productName"));
+        summary.put("plantId", meta.get("plantId"));
+        summary.put("areaId", meta.get("areaId"));
+        summary.put("batchStatus", meta.get("status"));
+        summary.put("batchStartAt", summary.getOrDefault("batchStartAt", cppDoc.get("observedAt")));
+        summary.put("batchEndAt", cppDoc.get("observedAt"));
+        summary.put("cppRecordCount", toLong(summary.get("cppRecordCount")) + 1);
+        summary.put("updatedAt", Date.from(Instant.now()));
+        mongoTemplate.save(summary, BATCH_SUMMARY_COLLECTION);
+    }
+
+    private String normalizeStreamType(String streamType) {
+        String normalized = firstNonBlank(streamType, "BATCH_CPP").toUpperCase(Locale.ROOT);
+        if (!"BATCH_CPP".equals(normalized) && !"ALARM_EVENT".equals(normalized)) {
+            throw new BusinessException("Unsupported streamType: " + streamType);
+        }
+        return normalized;
+    }
+
+    private Document findCheckpoint(String equipmentId, String streamType, String tenantId) {
+        Query query = new Query(Criteria.where("tenantId").is(tenantId)
+                .and("equipmentId").is(equipmentId)
+                .and("streamType").is(streamType));
+        return mongoTemplate.findOne(query, Document.class, CHECKPOINT_COLLECTION);
+    }
+
+    private String buildPerEquipmentCollectionName(String prefix, String tenantId, String equipmentId) {
+        return prefix + sanitizeCollectionPart(tenantId) + "_" + sanitizeCollectionPart(equipmentId);
+    }
+
+    private String sanitizeCollectionPart(String value) {
+        if (value == null) {
+            return "unknown";
+        }
+        return value.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "_").replaceAll("_+", "_");
+    }
+
+    private void ensureSimpleIndex(String collectionName, String key1, String key2) {
+        Document keys = new Document(key1, 1).append(key2, 1);
+        Document options = new Document("unique", true).append("name", "ux_source_table_seq");
+        Document command = new Document("createIndexes", collectionName)
+                .append("indexes", List.of(new Document("key", keys).append("name", "ux_source_table_seq").append("unique", true)));
+        try {
+            mongoTemplate.getDb().runCommand(command);
+        } catch (Exception ex) {
+            log.debug("Index ensure skipped for {}: {}", collectionName, ex.getMessage());
+        }
+    }
+
+    private void applyEqualsCriteria(Query query, Map<String, Object> filter, String key) {
+        String value = stringValue(filter.get(key));
+        if (value != null && !value.isBlank()) {
+            query.addCriteria(Criteria.where(key).is(value));
+        }
+    }
+
+    private void applyMetaCriteria(Query query, String key, String value) {
+        if (value != null && !value.isBlank()) {
+            query.addCriteria(Criteria.where(key).is(value));
+        }
+    }
+
+    private void applyDateRangeCriteria(Query query,
+                                        Map<String, Object> filter,
+                                        String field,
+                                        String fromKey,
+                                        String toKey) {
+        Instant from = parseInstantSafe(filter.get(fromKey));
+        Instant to = parseInstantSafe(filter.get(toKey));
+        if (from == null && to == null) {
+            return;
+        }
+        Criteria criteria = Criteria.where(field);
+        if (from != null) {
+            criteria = criteria.gte(Date.from(from));
+        }
+        if (to != null) {
+            criteria = criteria.lte(Date.from(to));
+        }
+        query.addCriteria(criteria);
+    }
+
+    private Instant parseInstantSafe(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return parseInstant(value);
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private int toInteger(Object value, int defaultValue, int maxValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+        try {
+            int parsed = Integer.parseInt(String.valueOf(value));
+            if (parsed <= 0) {
+                return defaultValue;
+            }
+            return Math.min(parsed, maxValue);
+        } catch (NumberFormatException ex) {
+            return defaultValue;
+        }
+    }
+
+    private long toLong(Object value) {
+        if (value == null) {
+            return 0L;
+        }
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        try {
+            return Long.parseLong(String.valueOf(value));
+        } catch (NumberFormatException ex) {
+            return 0L;
+        }
+    }
+
+    private Long toLongNullable(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        try {
+            return Long.parseLong(String.valueOf(value));
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    private String requireFilterText(Map<String, Object> request, String field) {
+        String value = stringValue(request.get(field));
+        if (value == null || value.isBlank()) {
+            throw new BusinessException(field + " is required");
+        }
+        return value;
+    }
+
+    private boolean isCppMetaField(String key, String sequenceColumn, String timestampColumn) {
+        if (key == null) {
+            return true;
+        }
+        String normalized = key.trim();
+        return normalized.equalsIgnoreCase(sequenceColumn)
+                || normalized.equalsIgnoreCase(timestampColumn)
+                || normalized.equalsIgnoreCase("Batch_Number")
+                || normalized.equalsIgnoreCase("BatchNo")
+                || normalized.equalsIgnoreCase("LotNumber")
+                || normalized.equalsIgnoreCase("Lot_No")
+                || normalized.equalsIgnoreCase("Product_Name")
+                || normalized.equalsIgnoreCase("ProductName")
+                || normalized.equalsIgnoreCase("EquipmentId")
+                || normalized.equalsIgnoreCase("Equipment_ID")
+                || normalized.equalsIgnoreCase("PlantId")
+                || normalized.equalsIgnoreCase("Plant_ID")
+                || normalized.equalsIgnoreCase("AreaId")
+                || normalized.equalsIgnoreCase("Area_ID")
+                || normalized.equalsIgnoreCase("BlockId")
+                || normalized.equalsIgnoreCase("Block_ID")
+                || normalized.equalsIgnoreCase("RoomId")
+                || normalized.equalsIgnoreCase("Room_ID")
+                || normalized.equalsIgnoreCase("Operator_Name")
+                || normalized.equalsIgnoreCase("OperatorName")
+                || normalized.equalsIgnoreCase("Status");
+    }
+
+    private Object normalizeSourceValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof String str) {
+            String trimmed = str.trim();
+            if (trimmed.isEmpty() || "NA".equalsIgnoreCase(trimmed) || "NULL".equalsIgnoreCase(trimmed)) {
+                return null;
+            }
+            Double numeric = toDouble(trimmed.replace("KG", "").replace("kg", "").trim());
+            return numeric == null ? trimmed : numeric;
+        }
+        if (value instanceof Date date) {
+            return date.toInstant().toString();
+        }
+        return value;
+    }
+
+    private String toCamelCaseKey(String key) {
+        if (key == null || key.isBlank()) {
+            return key;
+        }
+        String[] tokens = key.toLowerCase(Locale.ROOT).split("[^a-z0-9]+");
+        if (tokens.length == 0) {
+            return key;
+        }
+        StringBuilder sb = new StringBuilder(tokens[0]);
+        for (int i = 1; i < tokens.length; i++) {
+            if (tokens[i].isBlank()) {
+                continue;
+            }
+            sb.append(tokens[i].substring(0, 1).toUpperCase(Locale.ROOT)).append(tokens[i].substring(1));
+        }
+        return sb.toString();
+    }
+
+    private String toEventCode(String text) {
+        return text.toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]+", "_").replaceAll("_+", "_");
     }
 
     public Map<String, Object> ingestRaw(Map<String, Object> payload) {

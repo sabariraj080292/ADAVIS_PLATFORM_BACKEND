@@ -106,6 +106,10 @@ Indexes:
 ## 2.4 `iiotSourceTableMapping`
 Purpose: on-prem SQL table to cloud equipment stream mapping.
 
+Runtime rule for ingestion selection:
+- Ingestion must run only for mappings where `isActive = true`.
+- Each active mapping represents one equipment and includes both batch and alarm/event source metadata.
+
 Sample:
 ```json
 {
@@ -126,6 +130,11 @@ Sample:
     "sequenceColumn": "id",
     "timestampColumn": "LastModifiedTime"
   },
+  "pollIntervalSeconds": 30,
+  "batchSize": 1000,
+  "connectionRef": "SAP-HANA-ACME-01",
+  "lastValidatedAt": "2026-07-05T05:18:00Z",
+  "validationStatus": "SUCCESS",
   "isActive": true,
   "updatedAt": "2026-07-05T05:20:00Z"
 }
@@ -133,6 +142,7 @@ Sample:
 
 Indexes:
 - `{ tenantId: 1, equipmentId: 1 }` unique
+- `{ isActive: 1, tenantId: 1, equipmentId: 1 }`
 
 ## 2.5 `iiotIngestionCheckpoint`
 Purpose: incremental fetch state per tenant/equipment/stream.
@@ -682,3 +692,34 @@ Base path: `/api/v1/iiot/config`
 1. `GET /internal/v1/iiot/config/published-mapping/{tenantId}/{equipmentId}/{streamType}`
 2. `POST /internal/v1/iiot/config/mapping-preview/execute`
 3. `POST /internal/v1/iiot/config/validate-source-connection`
+
+## 13.9 API Cleanup Scope (Implementation Guardrail)
+
+Keep only these IIOT API groups in active code:
+1. Master APIs:
+  - equipment-master
+  - critical-parameters
+  - critical-parameter-limits
+  - product-master
+2. Configuration APIs:
+  - source mapping (draft/validate/preview/publish/rollback)
+  - ingestion controls (start/pause/status/schedule)
+  - checkpoint/replay operations
+3. Internal runtime APIs used by ingestion workers.
+
+Remove or deprecate any duplicate or legacy IIOT routes outside this scope.
+
+## 14) Implementation Checklist (Active Equipment Ingestion)
+
+1. Read active mappings from `iiotSourceTableMapping`.
+2. For each mapping, ingest both streams (`BATCH_CPP` and `ALARM_EVENT`) on configured interval.
+3. Use incremental pull from SQL source based on `lastProcessedSeqId`.
+4. Write data into per-equipment time-series collections:
+  - `iiot_ts_cpp_<tenant>_<equipment>`
+  - `iiot_ts_alarm_event_<tenant>_<equipment>`
+5. Enforce idempotency by unique key (`source.tableName`, `source.sourceSeqId`).
+6. Update `iiotIngestionCheckpoint` only after successful write commit.
+7. Write execution audit to `iiotIngestionJobRun`.
+8. Update `iiotEquipmentLiveStatus` snapshot from latest ingested events.
+9. Maintain `iiotBatchSummary` read model for UI filters and report pages.
+10. Apply retention policy (TTL) for time-series collections.
