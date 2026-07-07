@@ -350,6 +350,8 @@ public class UserService {
             .map(this::toCompactRole)
             .toList();
 
+        boolean isPrivilegedTenantAdmin = hasTenantAdminRole(roles);
+
         Map<String, Object> compactRolePermissions = toCompactRolePermissions(rolePermissions);
 
         Map<String, Object> context = new HashMap<>();
@@ -359,7 +361,7 @@ public class UserService {
         context.put("roles", compactRoles);
         context.put("rolePermissions", compactRolePermissions);
         context.put("assignedPlants", assignedPlants);
-        context.put("plantSelectionRequired", assignedPlants.size() > 1);
+        context.put("plantSelectionRequired", assignedPlants.size() > 1 && !isPrivilegedTenantAdmin);
         context.put("selectedPlantId", selectedPlantId);
         context.put("selectedPlant", selectedPlant);
 
@@ -371,11 +373,18 @@ public class UserService {
         }
 
     public Map<String, Object> selectPlantContext(String userId, String plantId, Boolean includePermissionMatrix) {
+        Map<String, Object> context = new HashMap<>(getLoginContext(userId, includePermissionMatrix));
+        List<Map<String, Object>> roles = castList(context.get("roles"));
+        boolean isPrivilegedTenantAdmin = hasTenantAdminRoleFromContextRoles(roles);
+
         if (!StringUtils.hasText(plantId)) {
+            if (isPrivilegedTenantAdmin) {
+                context.put("plantSelectionRequired", false);
+                return context;
+            }
             throw new BusinessException("plantId is required", "PLANT_ID_REQUIRED");
         }
 
-        Map<String, Object> context = new HashMap<>(getLoginContext(userId, includePermissionMatrix));
         List<Map<String, Object>> assignedPlants = castList(context.get("assignedPlants"));
 
         Map<String, Object> selectedPlant = assignedPlants.stream()
@@ -1153,6 +1162,24 @@ public class UserService {
             }
         }
         return null;
+    }
+
+    private boolean hasTenantAdminRole(List<Role> roles) {
+        return roles.stream()
+                .map(Role::getRoleCode)
+                .filter(StringUtils::hasText)
+                .anyMatch(this::isTenantAdminRoleCode);
+    }
+
+    private boolean hasTenantAdminRoleFromContextRoles(List<Map<String, Object>> roles) {
+        return roles.stream()
+                .map(role -> stringValue(role.get("roleCode")))
+                .filter(StringUtils::hasText)
+                .anyMatch(this::isTenantAdminRoleCode);
+    }
+
+    private boolean isTenantAdminRoleCode(String roleCode) {
+        return "SUPER_ADMIN".equalsIgnoreCase(roleCode) || "IT_ADMIN".equalsIgnoreCase(roleCode);
     }
 
     private Map<String, Object> buildPermissionMatrix(String tenantId,

@@ -30,6 +30,7 @@ import org.springframework.web.client.RestTemplate;
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -427,26 +428,53 @@ public class AuthenticationService {
     }
 
     private String resolveTenantId(String userId) {
+        String resolved = tryResolveTenantIdForUserId(userId);
+        if (StringUtils.hasText(resolved)) {
+            return resolved;
+        }
+
+        String upper = userId == null ? null : userId.toUpperCase(Locale.ROOT);
+        if (StringUtils.hasText(upper) && !upper.equals(userId)) {
+            resolved = tryResolveTenantIdForUserId(upper);
+            if (StringUtils.hasText(resolved)) {
+                return resolved;
+            }
+        }
+
+        String lower = userId == null ? null : userId.toLowerCase(Locale.ROOT);
+        if (StringUtils.hasText(lower) && !lower.equals(userId)) {
+            resolved = tryResolveTenantIdForUserId(lower);
+            if (StringUtils.hasText(resolved)) {
+                return resolved;
+            }
+        }
+
+        throw new BusinessException("Unable to resolve tenant context", "TENANT_CONTEXT_UNAVAILABLE");
+    }
+
+    private String tryResolveTenantIdForUserId(String userId) {
+        if (!StringUtils.hasText(userId)) {
+            return null;
+        }
+
         String url = mdmServiceBaseUrl + "/api/v1/mdm/users/" + userId;
         try {
             ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
             if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
-                throw new BusinessException("Unable to resolve tenant context", "TENANT_CONTEXT_UNAVAILABLE");
+                return null;
             }
 
             Object data = response.getBody().get("data");
             if (!(data instanceof Map<?, ?> dataMap)) {
-                throw new BusinessException("Unable to resolve tenant context", "TENANT_CONTEXT_UNAVAILABLE");
+                return null;
             }
 
             Object tenantId = dataMap.get("tenantId");
             String tenantValue = tenantId == null ? null : String.valueOf(tenantId).trim();
-            if (!StringUtils.hasText(tenantValue)) {
-                throw new BusinessException("Unable to resolve tenant context", "TENANT_CONTEXT_UNAVAILABLE");
-            }
-            return tenantValue;
+            return StringUtils.hasText(tenantValue) ? tenantValue : null;
         } catch (RestClientException ex) {
-            throw new BusinessException("Unable to resolve tenant context: " + ex.getMessage(), "TENANT_CONTEXT_UNAVAILABLE");
+            log.warn("Tenant resolution lookup failed for userId {}: {}", userId, ex.getMessage());
+            return null;
         }
     }
 

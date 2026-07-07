@@ -21,6 +21,7 @@ import reactor.core.publisher.Mono;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @Slf4j
@@ -157,6 +158,29 @@ public class JwtAuthenticationFilter implements GatewayFilter, Ordered {
     }
 
     private Mono<String> resolveTenantId(String userId) {
+        return tryResolveTenantIdForUserId(userId)
+                .switchIfEmpty(Mono.defer(() -> {
+                    String upper = userId == null ? null : userId.toUpperCase(Locale.ROOT);
+                    if (StringUtils.hasText(upper) && !upper.equals(userId)) {
+                        return tryResolveTenantIdForUserId(upper);
+                    }
+                    return Mono.empty();
+                }))
+                .switchIfEmpty(Mono.defer(() -> {
+                    String lower = userId == null ? null : userId.toLowerCase(Locale.ROOT);
+                    if (StringUtils.hasText(lower) && !lower.equals(userId)) {
+                        return tryResolveTenantIdForUserId(lower);
+                    }
+                    return Mono.empty();
+                }))
+                .switchIfEmpty(Mono.error(new IllegalStateException("Tenant context missing")));
+    }
+
+    private Mono<String> tryResolveTenantIdForUserId(String userId) {
+        if (!StringUtils.hasText(userId)) {
+            return Mono.empty();
+        }
+
         String url = mdmServiceBaseUrl + "/api/v1/mdm/users/" + userId;
         return webClientBuilder.build()
                 .get()
@@ -166,13 +190,18 @@ public class JwtAuthenticationFilter implements GatewayFilter, Ordered {
                 .flatMap(body -> {
                     Object data = body.get("data");
                     if (!(data instanceof Map<?, ?> dataMap)) {
-                        return Mono.error(new IllegalStateException("Invalid tenant context"));
+                        return Mono.empty();
                     }
                     Object tenantId = dataMap.get("tenantId");
-                    if (tenantId == null || String.valueOf(tenantId).isBlank()) {
-                        return Mono.error(new IllegalStateException("Tenant context missing"));
+                    String tenantValue = tenantId == null ? null : String.valueOf(tenantId).trim();
+                    if (!StringUtils.hasText(tenantValue)) {
+                        return Mono.empty();
                     }
-                    return Mono.just(String.valueOf(tenantId));
+                    return Mono.just(tenantValue);
+                })
+                .onErrorResume(ex -> {
+                    log.warn("Tenant lookup failed for userId {}: {}", userId, ex.getMessage());
+                    return Mono.empty();
                 });
     }
 

@@ -2066,6 +2066,17 @@ upsertOne('mdm_user_context_assignments', { assignmentId: 'ASGN-000001' }, {
     isActive: true
 });
 
+upsertOne('mdm_user_context_assignments', { assignmentId: 'ASGN-000002' }, {
+    assignmentId: 'ASGN-000002',
+    tenantId: 'TNT-0001',
+    userId: 'IT_ADMIN',
+    plantId: 'PLNT-0001',
+    departmentId: 'DEP-0002',
+    groupId: platformAdminGroupId,
+    isActive: true
+});
+
+
 upsertOne('mdm_role_permissions', { roleId: superAdminRoleId, moduleId: 'MOD-0001', version: 1 },
     buildRolePermissionDocument('TNT-0001', superAdminRoleId, 'MOD-0001', screenSeed, featureSeed)
 );

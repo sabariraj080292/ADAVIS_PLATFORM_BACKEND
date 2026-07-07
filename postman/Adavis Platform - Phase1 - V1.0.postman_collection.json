@@ -4582,6 +4582,76 @@
           "response": []
         },
         {
+          "name": "Trigger Ingestion",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/ingestion/{{iiotEquipmentId}}/trigger",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "ingestion",
+                "{{iiotEquipmentId}}",
+                "trigger"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Ingestion Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/ingestion/{{iiotEquipmentId}}/status?streamType={{iiotStreamType}}",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "ingestion",
+                "{{iiotEquipmentId}}",
+                "status"
+              ],
+              "query": [
+                {
+                  "key": "streamType",
+                  "value": "{{iiotStreamType}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Source Mapping List",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/source-mappings",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "source-mappings"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
           "name": "Source Mapping By Equipment",
           "request": {
             "method": "GET",
@@ -4597,6 +4667,26 @@
                 "iiot",
                 "source-mappings",
                 "{{iiotEquipmentId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Equipment Live Status List",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{iiotBaseUrl}}/api/v1/iiot/equipment-live-status",
+              "host": [
+                "{{iiotBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "iiot",
+                "equipment-live-status"
               ]
             }
           },
@@ -4825,11 +4915,11 @@
   "variable": [
     {
       "key": "authBaseUrl",
-      "value": "http://localhost:9092"
+      "value": "http://localhost:9081"
     },
     {
       "key": "iiotBaseUrl",
-      "value": "http://localhost:9095"
+      "value": "http://localhost:9085"
     },
     {
       "key": "iiotEquipmentId",
@@ -4838,6 +4928,10 @@
     {
       "key": "iiotLimit",
       "value": "3"
+    },
+    {
+      "key": "iiotStreamType",
+      "value": "BATCH_CPP"
     },
     {
       "key": "iiotEquipmentCode",

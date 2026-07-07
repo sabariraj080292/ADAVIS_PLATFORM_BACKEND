@@ -109,7 +109,7 @@ function Wait-MongoReady {
 $mongoUris = @(
     "mongodb://admin:Admin123!@localhost:27017/adavis_platform?authSource=admin",
     "mongodb://admin:Admin123!@localhost:27017/adavis_platform?authSource=adavis_platform",
-    "mongodb://localhost:37017/adavis_platform"
+    "mongodb://localhost:27017/adavis_platform"
 )
 
 function Invoke-MongoCommand {
@@ -174,7 +174,13 @@ if (-not (Invoke-MongoCommand -Uris $mongoUris -Arguments @("/docker-entrypoint-
 
 if (Test-Path $iiotSeedScript) {
     Write-Step "Applying IIOT sample seed script to MongoDB"
-    if (-not (Invoke-MongoCommand -Uris $mongoUris -Arguments @("/seed/seed_data_iiot_file.js") -Silent)) {
+    $containerIiotSeedScript = "/tmp/seed_data_iiot_file.js"
+    & docker cp $iiotSeedScript "adavis-mongodb:$containerIiotSeedScript"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to copy IIOT seed script into adavis-mongodb container."
+    }
+
+    if (-not (Invoke-MongoCommand -Uris $mongoUris -Arguments @($containerIiotSeedScript) -Silent)) {
         throw "IIOT seed operation failed."
     }
 }
