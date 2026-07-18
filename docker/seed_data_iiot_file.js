@@ -14,7 +14,7 @@ if (typeof process !== "undefined" && process.env && process.env.MONGO_INITDB_DA
 db = db.getSiblingDB(databaseName);
 
 var TENANT_ID = "TNT-0001";
-var BASE_PLANT_ID = "TNT-0001";
+var BASE_PLANT_ID = "PLNT-0001";
 var BASE_BLOCK_ID = "BLK-0001";
 var BASE_AREA_ID = "AREA-0001";
 var BASE_ROOM_ID = "ROOM-0001";
