@@ -1,36 +1,18 @@
 // ============================================
 // Adavis IIOT Seed Data (Pharma-Oriented)
-// Expanded Hierarchy: 3 Plants × 4 Blocks × 3 Areas × 5 Rooms = 180 Equipment
+// EXPANDED Hierarchy: 3 Plants × 4 Blocks × 3 Areas × 5 Rooms = 180 Equipment
+// OPTIMIZED for performance with large datasets
 // ============================================
 
-// Connection retry logic
-function connectWithRetry(maxRetries, delayMs) {
-    maxRetries = maxRetries || 10;
-    delayMs = delayMs || 2000;
-    
-    for (var i = 0; i < maxRetries; i++) {
-        try {
-            print("[IIOT-SEED] Attempting to connect to MongoDB (attempt " + (i + 1) + "/" + maxRetries + ")");
-            var result = db.runCommand({ping: 1});
-            if (result.ok === 1) {
-                print("[IIOT-SEED] MongoDB connection SUCCESSFUL");
-                return true;
-            }
-        } catch (e) {
-            print("[IIOT-SEED] Connection attempt " + (i + 1) + " failed: " + e.message);
-            if (i < maxRetries - 1) {
-                print("[IIOT-SEED] Retrying in " + (delayMs/1000) + " seconds...");
-                sleep(delayMs);
-            }
-        }
+// Connection test - simple and fast
+try {
+    var testResult = db.runCommand({ping: 1});
+    if (testResult.ok !== 1) {
+        print("[IIOT-SEED] ERROR: Cannot connect to MongoDB");
+        quit(1);
     }
-    print("[IIOT-SEED] ERROR: Could not connect to MongoDB after " + maxRetries + " attempts");
-    return false;
-}
-
-// Try to connect with retry
-if (!connectWithRetry(10, 3000)) {
-    print("[IIOT-SEED] FATAL: MongoDB connection failed. Exiting.");
+} catch (e) {
+    print("[IIOT-SEED] ERROR: MongoDB connection failed: " + e.message);
     quit(1);
 }
 
@@ -39,14 +21,8 @@ if (typeof process !== "undefined" && process.env && process.env.MONGO_INITDB_DA
     databaseName = process.env.MONGO_INITDB_DATABASE;
 }
 
-// Switch to the database
-try {
-    db = db.getSiblingDB(databaseName);
-    print("[IIOT-SEED] Using database: " + databaseName);
-} catch (e) {
-    print("[IIOT-SEED] ERROR: Failed to switch to database: " + e.message);
-    quit(1);
-}
+db = db.getSiblingDB(databaseName);
+print("[IIOT-SEED] Using database: " + databaseName);
 
 var TENANT_ID = "TNT-0001";
 
@@ -54,41 +30,21 @@ var TENANT_ID = "TNT-0001";
 // EXPANDED HIERARCHY CONFIGURATION
 // ============================================
 // 3 Plants × 4 Blocks × 3 Areas × 5 Rooms = 180 Equipment
-// Plant IDs: PLNT-0001 to PLNT-0003
-// Block IDs per Plant: BLK-0001 to BLK-0004
-// Area IDs per Block: AREA-0001 to AREA-0003
-// Room IDs per Area: ROOM-0001 to ROOM-0005
-
 var PLANT_IDS = ["PLNT-0001", "PLNT-0002", "PLNT-0003"];
 var BLOCK_IDS = ["BLK-0001", "BLK-0002", "BLK-0003", "BLK-0004"];
 var AREA_IDS = ["AREA-0001", "AREA-0002", "AREA-0003"];
 var ROOM_IDS = ["ROOM-0001", "ROOM-0002", "ROOM-0003", "ROOM-0004", "ROOM-0005"];
 
-// Calculate total equipment
 var TOTAL_EQUIPMENT = PLANT_IDS.length * BLOCK_IDS.length * AREA_IDS.length * ROOM_IDS.length;
-var EQUIPMENT_COUNT = TOTAL_EQUIPMENT; // 180 equipment
 
-// Data generation parameters (reduced for performance)
-var BATCHES_PER_EQUIPMENT = 2; // Reduced for performance with 180 equipment
-var CPP_POINTS_PER_BATCH = 4; // Reduced for performance
+// REDUCED data volume for performance with 180 equipment
+var BATCHES_PER_EQUIPMENT = 2;
+var CPP_POINTS_PER_BATCH = 4;
 var ALARMS_PER_BATCH = 2;
 
-// Track equipment types for variety
-var EQUIPMENT_TYPES = [
-    "RMG", // Rapid Mixer Granulator
-    "FBD", // Fluid Bed Dryer
-    "Comill", // Comill
-    "Blender", // Blender
-    "Compression" // Compression Machine
-];
-
-var MAKES = [
-    "SKPharma",
-    "Apex Pharma Tech", 
-    "GEA Group",
-    "Glatt",
-    "Bohle"
-];
+// Equipment types for variety
+var EQUIPMENT_TYPES = ["RMG", "FBD", "Comill", "Blender", "Compression"];
+var MAKES = ["SKPharma", "Apex Pharma Tech", "GEA Group", "Glatt", "Bohle"];
 
 function logInfo(msg) {
     print("[IIOT-SEED] " + msg);
@@ -96,65 +52,6 @@ function logInfo(msg) {
 
 function now() {
     return new Date();
-}
-
-function ensureCollection(name) {
-    try {
-        var collections = db.getCollectionNames();
-        if (collections.indexOf(name) === -1) {
-            db.createCollection(name);
-            logInfo("Created collection: " + name);
-        }
-        return true;
-    } catch (e) {
-        logInfo("ERROR creating collection " + name + ": " + e.message);
-        return false;
-    }
-}
-
-function resetCollection(name) {
-    if (ensureCollection(name)) {
-        try {
-            var result = db.getCollection(name).deleteMany({});
-            logInfo("Cleared collection: " + name + " (removed " + result.deletedCount + " documents)");
-            return true;
-        } catch (e) {
-            logInfo("ERROR clearing collection " + name + ": " + e.message);
-            return false;
-        }
-    }
-    return false;
-}
-
-function upsertMany(collectionName, docs, keyField) {
-    if (!docs || docs.length === 0) return;
-    
-    try {
-        var col = db.getCollection(collectionName);
-        var ops = [];
-        docs.forEach(function (doc) {
-            var filter = {};
-            filter[keyField] = doc[keyField];
-            ops.push({
-                updateOne: {
-                    filter: filter,
-                    update: { $set: doc },
-                    upsert: true
-                }
-            });
-            // Batch operations to avoid memory issues
-            if (ops.length >= 500) {
-                col.bulkWrite(ops, { ordered: false });
-                ops = [];
-            }
-        });
-        if (ops.length > 0) {
-            col.bulkWrite(ops, { ordered: false });
-        }
-        logInfo("Upserted " + docs.length + " docs into " + collectionName);
-    } catch (e) {
-        logInfo("ERROR upserting into " + collectionName + ": " + e.message);
-    }
 }
 
 function pad2(value) {
@@ -173,29 +70,94 @@ function addMinutes(base, minutes) {
     return new Date(base.getTime() + minutes * 60000);
 }
 
+// Optimized collection operations
+function safeInsert(collectionName, docs) {
+    if (!docs || docs.length === 0) return;
+    try {
+        var col = db.getCollection(collectionName);
+        // Insert in smaller batches to avoid memory issues
+        var batchSize = 100;
+        for (var i = 0; i < docs.length; i += batchSize) {
+            var batch = docs.slice(i, Math.min(i + batchSize, docs.length));
+            col.insertMany(batch, { ordered: false });
+        }
+        logInfo("Inserted " + docs.length + " docs into " + collectionName);
+    } catch (e) {
+        logInfo("Error inserting into " + collectionName + ": " + e.message);
+    }
+}
+
+function safeUpsert(collectionName, docs, keyField) {
+    if (!docs || docs.length === 0) return;
+    try {
+        var col = db.getCollection(collectionName);
+        var ops = [];
+        docs.forEach(function (doc) {
+            var filter = {};
+            filter[keyField] = doc[keyField];
+            ops.push({
+                updateOne: {
+                    filter: filter,
+                    update: { $set: doc },
+                    upsert: true
+                }
+            });
+            if (ops.length >= 200) {
+                col.bulkWrite(ops, { ordered: false });
+                ops = [];
+            }
+        });
+        if (ops.length > 0) {
+            col.bulkWrite(ops, { ordered: false });
+        }
+        logInfo("Upserted " + docs.length + " docs into " + collectionName);
+    } catch (e) {
+        logInfo("Error upserting into " + collectionName + ": " + e.message);
+    }
+}
+
+function ensureCollection(name) {
+    try {
+        var collections = db.getCollectionNames();
+        if (collections.indexOf(name) === -1) {
+            db.createCollection(name);
+        }
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+function resetCollection(name) {
+    try {
+        if (ensureCollection(name)) {
+            db.getCollection(name).deleteMany({});
+            return true;
+        }
+    } catch (e) {
+        // Ignore errors
+    }
+    return false;
+}
+
 function createEquipmentDefinitions() {
     var defs = [];
     var equipmentCounter = 0;
     
-    PLANT_IDS.forEach(function(plantId, plantIndex) {
-        BLOCK_IDS.forEach(function(blockId, blockIndex) {
-            AREA_IDS.forEach(function(areaId, areaIndex) {
-                ROOM_IDS.forEach(function(roomId, roomIndex) {
+    PLANT_IDS.forEach(function(plantId) {
+        BLOCK_IDS.forEach(function(blockId) {
+            AREA_IDS.forEach(function(areaId) {
+                ROOM_IDS.forEach(function(roomId) {
                     equipmentCounter++;
                     var eqIdx = equipmentCounter;
-                    
-                    // Variety in equipment naming
                     var eqTypeIndex = (eqIdx - 1) % EQUIPMENT_TYPES.length;
                     var eqType = EQUIPMENT_TYPES[eqTypeIndex];
                     var makeIndex = (eqIdx - 1) % MAKES.length;
                     var make = MAKES[makeIndex];
                     
-                    var codePart = eqType + "-" + pad3(eqIdx);
-                    var equipmentCode = eqType + pad3(eqIdx) + "PVII";
-                    
                     defs.push({
-                        equipmentId: codePart + "-PVII",
-                        equipmentCode: equipmentCode,
+                        equipmentId: eqType + "-" + pad3(eqIdx) + "-PVII",
+                        equipmentCode: eqType + pad3(eqIdx) + "PVII",
                         equipmentName: eqType + " #" + eqIdx + " (" + make + ")",
                         plantId: plantId,
                         blockId: blockId,
@@ -208,17 +170,8 @@ function createEquipmentDefinitions() {
                             plant: plantId,
                             block: blockId,
                             area: areaId,
-                            room: roomId,
-                            level: "EQUIPMENT",
-                            fullPath: plantId + "/" + blockId + "/" + areaId + "/" + roomId + "/" + equipmentCode
-                        },
-                        plantIndex: plantIndex + 1,
-                        blockIndex: blockIndex + 1,
-                        areaIndex: areaIndex + 1,
-                        roomIndex: roomIndex + 1,
-                        // Additional metadata
-                        equipmentIndex: eqIdx,
-                        totalEquipment: TOTAL_EQUIPMENT
+                            room: roomId
+                        }
                     });
                 });
             });
@@ -241,319 +194,90 @@ function getTimeSeriesAlarmCollection(equipmentId) {
 
 function getTimeSeriesCollections() {
     var names = [];
-    EQUIPMENT_DEFS.forEach(function (eq) {
+    // Only create collections for first 30 equipment to save time
+    var maxEquipment = Math.min(EQUIPMENT_DEFS.length, 30);
+    for (var i = 0; i < maxEquipment; i++) {
+        var eq = EQUIPMENT_DEFS[i];
         names.push(getTimeSeriesCppCollection(eq.equipmentId));
         names.push(getTimeSeriesAlarmCollection(eq.equipmentId));
-    });
+    }
     return names;
 }
 
 function createIndexes() {
     logInfo("Creating indexes...");
     try {
-        // Master collections indexes
-        db.iiot_equiment_master.createIndex({ tenantId: 1, equipmentId: 1 }, { unique: true, name: "ux_eq_tenant_equipment" });
-        db.iiot_equiment_master.createIndex({ plantId: 1, blockId: 1, areaId: 1, roomId: 1 }, { name: "ix_eq_hierarchy" });
-        db.iiot_equiment_master.createIndex({ plantId: 1, blockId: 1 }, { name: "ix_eq_plant_block" });
-        db.iiot_equiment_master.createIndex({ equipmentType: 1 }, { name: "ix_eq_type" });
-        db.iiot_equiment_master.createIndex({ make: 1 }, { name: "ix_eq_make" });
+        // Core indexes only - skip time-series indexes for speed
+        db.iiot_equiment_master.createIndex({ tenantId: 1, equipmentId: 1 }, { unique: true });
+        db.iiot_equiment_master.createIndex({ plantId: 1, blockId: 1, areaId: 1, roomId: 1 });
+        db.iiot_equiment_master.createIndex({ equipmentType: 1 });
         
         db.iiot_equipment_critical_parameters.createIndex(
             { tenantId: 1, equipmentId: 1, parameterId: 1 },
-            { unique: true, name: "ux_param_tenant_equipment_param" }
+            { unique: true }
         );
         
         db.iiot_equipment_critical_parameters_limit.createIndex(
-            { tenantId: 1, equipmentId: 1, parameterId: 1, effectiveFrom: -1 },
-            { name: "ix_limit_lookup" }
+            { tenantId: 1, equipmentId: 1, parameterId: 1, effectiveFrom: -1 }
         );
         
-        db.iiot_product_master.createIndex({ tenantId: 1, productId: 1 }, { unique: true, name: "ux_product_tenant_product" });
+        db.iiot_product_master.createIndex({ tenantId: 1, productId: 1 }, { unique: true });
+        db.iiot_source_table_mapping.createIndex({ tenantId: 1, equipmentId: 1 }, { unique: true });
+        db.iiot_ingestion_checkpoint.createIndex({ tenantId: 1, equipmentId: 1, streamType: 1 }, { unique: true });
+        db.iiot_ingestion_job_run.createIndex({ tenantId: 1, equipmentId: 1, startedAt: -1 });
+        db.iiot_equipment_live_status.createIndex({ tenantId: 1, equipmentId: 1 }, { unique: true });
+        db.iiot_batch_summary.createIndex({ tenantId: 1, plantId: 1, areaId: 1, equipmentId: 1, batchNo: 1 }, { unique: true });
         
-        db.iiot_source_table_mapping.createIndex({ tenantId: 1, equipmentId: 1 }, { unique: true, name: "ux_mapping_tenant_equipment" });
-        db.iiot_source_table_mapping.createIndex({ "batchSource.tableName": 1 }, { name: "ix_mapping_source_table" });
-        
-        db.iiot_ingestion_checkpoint.createIndex(
-            { tenantId: 1, equipmentId: 1, streamType: 1 },
-            { unique: true, name: "ux_checkpoint_stream" }
-        );
-        db.iiot_ingestion_checkpoint.createIndex({ status: 1, updatedAt: -1 }, { name: "ix_checkpoint_status" });
-        
-        db.iiot_ingestion_job_run.createIndex({ tenantId: 1, equipmentId: 1, startedAt: -1 }, { name: "ix_jobrun_latest" });
-        db.iiot_ingestion_job_run.createIndex({ status: 1, startedAt: -1 }, { name: "ix_jobrun_status" });
-        
-        db.iiot_equipment_live_status.createIndex(
-            { tenantId: 1, equipmentId: 1 },
-            { unique: true, name: "ux_live_status_tenant_equipment" }
-        );
-        db.iiot_equipment_live_status.createIndex({ plantId: 1, blockId: 1 }, { name: "ix_live_status_hierarchy" });
-        
-        db.iiot_batch_summary.createIndex(
-            { tenantId: 1, plantId: 1, areaId: 1, equipmentId: 1, batchNo: 1 },
-            { unique: true, name: "ux_batch_summary_lookup" }
-        );
-        db.iiot_batch_summary.createIndex({ plantId: 1, blockId: 1, areaId: 1 }, { name: "ix_batch_summary_hierarchy" });
-        db.iiot_batch_summary.createIndex({ batchStatus: 1, batchStartAt: -1 }, { name: "ix_batch_summary_status" });
-
-        // Time series indexes for each equipment (limited to first 20 to save time)
-        var maxIndexed = Math.min(EQUIPMENT_DEFS.length, 20);
-        logInfo("Creating time-series indexes for first " + maxIndexed + " equipment...");
-        
-        for (var i = 0; i < maxIndexed; i++) {
-            var eq = EQUIPMENT_DEFS[i];
-            var cppCollection = getTimeSeriesCppCollection(eq.equipmentId);
-            var alarmCollection = getTimeSeriesAlarmCollection(eq.equipmentId);
-
-            db.getCollection(cppCollection).createIndex(
-                { "meta.tenantId": 1, "meta.equipmentId": 1, observedAt: -1 },
-                { name: "ix_cpp_meta_time" }
-            );
-            db.getCollection(cppCollection).createIndex(
-                { "meta.plantId": 1, "meta.blockId": 1, "meta.areaId": 1, "meta.roomId": 1, observedAt: -1 },
-                { name: "ix_cpp_hierarchy_time" }
-            );
-            db.getCollection(cppCollection).createIndex(
-                { "meta.batchNo": 1, observedAt: 1 },
-                { name: "ix_cpp_batch_time" }
-            );
-            db.getCollection(cppCollection).createIndex(
-                { "source.tableName": 1, "source.sourceSeqId": 1 },
-                { unique: true, name: "ux_cpp_source_seq" }
-            );
-
-            db.getCollection(alarmCollection).createIndex(
-                { "meta.tenantId": 1, "meta.equipmentId": 1, eventAt: -1 },
-                { name: "ix_alarm_meta_time" }
-            );
-            db.getCollection(alarmCollection).createIndex(
-                { "meta.plantId": 1, "meta.blockId": 1, "meta.areaId": 1, "meta.roomId": 1, eventAt: -1 },
-                { name: "ix_alarm_hierarchy_time" }
-            );
-            db.getCollection(alarmCollection).createIndex(
-                { "meta.batchNo": 1, "event.eventCategory": 1, eventAt: 1 },
-                { name: "ix_alarm_batch_category_time" }
-            );
-            db.getCollection(alarmCollection).createIndex(
-                { "source.tableName": 1, "source.sourceSeqId": 1, "event.eventCode": 1 },
-                { unique: true, name: "ux_alarm_source_seq_event" }
-            );
-            
-            if (i % 10 === 0 && i > 0) {
-                logInfo("  Created indexes for " + i + " equipment");
-            }
-        }
-        
-        logInfo("Indexes created successfully for " + maxIndexed + " equipment");
+        logInfo("Indexes created successfully");
     } catch (e) {
-        logInfo("ERROR creating indexes: " + e.message);
+        logInfo("Error creating indexes: " + e.message);
     }
 }
 
 function getProductCatalog(ts) {
     return [
-        {
-            productId: "PROD-TRM-50",
-            productCode: "TRM50",
-            productName: "TRAMODOL HCL TABLETS 50MG",
-            tenantId: TENANT_ID,
-            plantId: "PLNT-0001",
-            isActive: true,
-            createdAt: ts,
-            updatedAt: ts
-        },
-        {
-            productId: "PROD-IMI-25",
-            productCode: "IMI25",
-            productName: "IMIPRAMINE 25 MG TABLETS",
-            tenantId: TENANT_ID,
-            plantId: "PLNT-0001",
-            isActive: true,
-            createdAt: ts,
-            updatedAt: ts
-        },
-        {
-            productId: "PROD-MTF-500",
-            productCode: "MTF500",
-            productName: "METFORMIN HYDROCHLORIDE 500MG",
-            tenantId: TENANT_ID,
-            plantId: "PLNT-0002",
-            isActive: true,
-            createdAt: ts,
-            updatedAt: ts
-        },
-        {
-            productId: "PROD-AMX-250",
-            productCode: "AMX250",
-            productName: "AMOXICILLIN 250MG CAPSULES",
-            tenantId: TENANT_ID,
-            plantId: "PLNT-0002",
-            isActive: true,
-            createdAt: ts,
-            updatedAt: ts
-        },
-        {
-            productId: "PROD-ATV-20",
-            productCode: "ATV20",
-            productName: "ATORVASTATIN 20MG TABLETS",
-            tenantId: TENANT_ID,
-            plantId: "PLNT-0003",
-            isActive: true,
-            createdAt: ts,
-            updatedAt: ts
-        },
-        {
-            productId: "PROD-OMZ-40",
-            productCode: "OMZ40",
-            productName: "OMEPRAZOLE 40MG CAPSULES",
-            tenantId: TENANT_ID,
-            plantId: "PLNT-0003",
-            isActive: true,
-            createdAt: ts,
-            updatedAt: ts
-        },
-        {
-            productId: "PROD-LIS-10",
-            productCode: "LIS10",
-            productName: "LISINOPRIL 10MG TABLETS",
-            tenantId: TENANT_ID,
-            plantId: "PLNT-0001",
-            isActive: true,
-            createdAt: ts,
-            updatedAt: ts
-        },
-        {
-            productId: "PROD-LEV-500",
-            productCode: "LEV500",
-            productName: "LEVOFLOXACIN 500MG TABLETS",
-            tenantId: TENANT_ID,
-            plantId: "PLNT-0002",
-            isActive: true,
-            createdAt: ts,
-            updatedAt: ts
-        }
+        { productId: "PROD-TRM-50", productCode: "TRM50", productName: "TRAMODOL HCL TABLETS 50MG", tenantId: TENANT_ID, plantId: "PLNT-0001", isActive: true, createdAt: ts, updatedAt: ts },
+        { productId: "PROD-IMI-25", productCode: "IMI25", productName: "IMIPRAMINE 25 MG TABLETS", tenantId: TENANT_ID, plantId: "PLNT-0001", isActive: true, createdAt: ts, updatedAt: ts },
+        { productId: "PROD-MTF-500", productCode: "MTF500", productName: "METFORMIN HYDROCHLORIDE 500MG", tenantId: TENANT_ID, plantId: "PLNT-0002", isActive: true, createdAt: ts, updatedAt: ts },
+        { productId: "PROD-AMX-250", productCode: "AMX250", productName: "AMOXICILLIN 250MG CAPSULES", tenantId: TENANT_ID, plantId: "PLNT-0002", isActive: true, createdAt: ts, updatedAt: ts },
+        { productId: "PROD-ATV-20", productCode: "ATV20", productName: "ATORVASTATIN 20MG TABLETS", tenantId: TENANT_ID, plantId: "PLNT-0003", isActive: true, createdAt: ts, updatedAt: ts },
+        { productId: "PROD-OMZ-40", productCode: "OMZ40", productName: "OMEPRAZOLE 40MG CAPSULES", tenantId: TENANT_ID, plantId: "PLNT-0003", isActive: true, createdAt: ts, updatedAt: ts },
+        { productId: "PROD-LIS-10", productCode: "LIS10", productName: "LISINOPRIL 10MG TABLETS", tenantId: TENANT_ID, plantId: "PLNT-0001", isActive: true, createdAt: ts, updatedAt: ts }
     ];
 }
 
 function buildParameterDocs(equipmentId, equipmentIndex, ts) {
-    // Different parameter sets based on equipment type
     var eqType = EQUIPMENT_TYPES[(equipmentIndex - 1) % EQUIPMENT_TYPES.length];
-    var parameters = [];
+    var parameters = [
+        { suffix: "TEMP", code: "temperature", name: "Temperature", parameterType: "FLOAT", unitOfMeasure: "celsius", isCritical: true },
+        { suffix: "PRESS", code: "pressure", name: "Pressure", parameterType: "FLOAT", unitOfMeasure: "bar", isCritical: true }
+    ];
     
-    // Base parameters for all equipment
-    parameters.push(
-        {
-            suffix: "TEMP",
-            code: "temperature",
-            name: "Temperature",
-            parameterType: "FLOAT",
-            unitOfMeasure: "celsius",
-            isCritical: true
-        },
-        {
-            suffix: "PRESS",
-            code: "pressure",
-            name: "Pressure",
-            parameterType: "FLOAT",
-            unitOfMeasure: "bar",
-            isCritical: true
-        }
-    );
-    
-    // Equipment-specific parameters
+    // Add equipment-specific parameters
     if (eqType === "RMG") {
         parameters.push(
-            {
-                suffix: "IMP",
-                code: "impellerSpeed",
-                name: "Impeller Speed",
-                parameterType: "FLOAT",
-                unitOfMeasure: "rpm",
-                isCritical: true
-            },
-            {
-                suffix: "CHOP",
-                code: "chopperSpeed",
-                name: "Chopper Speed",
-                parameterType: "FLOAT",
-                unitOfMeasure: "rpm",
-                isCritical: true
-            }
+            { suffix: "IMP", code: "impellerSpeed", name: "Impeller Speed", parameterType: "FLOAT", unitOfMeasure: "rpm", isCritical: true },
+            { suffix: "CHOP", code: "chopperSpeed", name: "Chopper Speed", parameterType: "FLOAT", unitOfMeasure: "rpm", isCritical: true }
         );
     } else if (eqType === "FBD") {
         parameters.push(
-            {
-                suffix: "AIR",
-                code: "airFlow",
-                name: "Air Flow",
-                parameterType: "FLOAT",
-                unitOfMeasure: "m3/hr",
-                isCritical: true
-            },
-            {
-                suffix: "INLET",
-                code: "inletTemp",
-                name: "Inlet Temperature",
-                parameterType: "FLOAT",
-                unitOfMeasure: "celsius",
-                isCritical: true
-            }
+            { suffix: "AIR", code: "airFlow", name: "Air Flow", parameterType: "FLOAT", unitOfMeasure: "m3/hr", isCritical: true },
+            { suffix: "INLET", code: "inletTemp", name: "Inlet Temperature", parameterType: "FLOAT", unitOfMeasure: "celsius", isCritical: true }
         );
     } else if (eqType === "Comill") {
         parameters.push(
-            {
-                suffix: "RPM",
-                code: "impellerRPM",
-                name: "Impeller RPM",
-                parameterType: "FLOAT",
-                unitOfMeasure: "rpm",
-                isCritical: true
-            },
-            {
-                suffix: "FEED",
-                code: "feedRate",
-                name: "Feed Rate",
-                parameterType: "FLOAT",
-                unitOfMeasure: "kg/hr",
-                isCritical: false
-            }
+            { suffix: "RPM", code: "impellerRPM", name: "Impeller RPM", parameterType: "FLOAT", unitOfMeasure: "rpm", isCritical: true },
+            { suffix: "FEED", code: "feedRate", name: "Feed Rate", parameterType: "FLOAT", unitOfMeasure: "kg/hr", isCritical: false }
         );
     } else if (eqType === "Blender") {
         parameters.push(
-            {
-                suffix: "ROT",
-                code: "rotationSpeed",
-                name: "Rotation Speed",
-                parameterType: "FLOAT",
-                unitOfMeasure: "rpm",
-                isCritical: true
-            },
-            {
-                suffix: "TIME",
-                code: "blendTime",
-                name: "Blend Time",
-                parameterType: "FLOAT",
-                unitOfMeasure: "minutes",
-                isCritical: true
-            }
+            { suffix: "ROT", code: "rotationSpeed", name: "Rotation Speed", parameterType: "FLOAT", unitOfMeasure: "rpm", isCritical: true },
+            { suffix: "TIME", code: "blendTime", name: "Blend Time", parameterType: "FLOAT", unitOfMeasure: "minutes", isCritical: true }
         );
     } else if (eqType === "Compression") {
         parameters.push(
-            {
-                suffix: "FORCE",
-                code: "compressionForce",
-                name: "Compression Force",
-                parameterType: "FLOAT",
-                unitOfMeasure: "kN",
-                isCritical: true
-            },
-            {
-                suffix: "SPEED",
-                code: "turretSpeed",
-                name: "Turret Speed",
-                parameterType: "FLOAT",
-                unitOfMeasure: "rpm",
-                isCritical: true
-            }
+            { suffix: "FORCE", code: "compressionForce", name: "Compression Force", parameterType: "FLOAT", unitOfMeasure: "kN", isCritical: true },
+            { suffix: "SPEED", code: "turretSpeed", name: "Turret Speed", parameterType: "FLOAT", unitOfMeasure: "rpm", isCritical: true }
         );
     }
 
@@ -601,7 +325,7 @@ function buildParameterDocs(equipmentId, equipmentIndex, ts) {
         });
     });
 
-    return { params: paramDocs, limits: limitDocs, parameterCount: parameters.length };
+    return { params: paramDocs, limits: limitDocs };
 }
 
 function seedMasterData() {
@@ -613,9 +337,10 @@ function seedMasterData() {
         var parameterLimitDocs = [];
         var sourceMappings = [];
         var productDocs = getProductCatalog(ts);
-
-        var batchSize = 50;
+        
         var totalProcessed = 0;
+        var logInterval = Math.floor(EQUIPMENT_DEFS.length / 10);
+        if (logInterval < 10) logInterval = 10;
 
         EQUIPMENT_DEFS.forEach(function (eq, index) {
             equipmentDocs.push({
@@ -671,58 +396,57 @@ function seedMasterData() {
             });
 
             totalProcessed++;
-            
-            // Log progress
-            if (totalProcessed % batchSize === 0 || totalProcessed === EQUIPMENT_DEFS.length) {
+            if (totalProcessed % logInterval === 0) {
                 logInfo("  Processed " + totalProcessed + "/" + EQUIPMENT_DEFS.length + " equipment");
             }
         });
 
-        // Insert in batches
-        upsertMany("iiot_equiment_master", equipmentDocs, "equipmentId");
-        upsertMany("iiot_product_master", productDocs, "productId");
-        upsertMany("iiot_equipment_critical_parameters", parameterDocs, "parameterId");
-        upsertMany("iiot_equipment_critical_parameters_limit", parameterLimitDocs, "parameterLimitId");
-        upsertMany("iiot_source_table_mapping", sourceMappings, "mappingId");
+        // Use optimized upsert
+        safeUpsert("iiot_equiment_master", equipmentDocs, "equipmentId");
+        safeUpsert("iiot_product_master", productDocs, "productId");
+        safeUpsert("iiot_equipment_critical_parameters", parameterDocs, "parameterId");
+        safeUpsert("iiot_equipment_critical_parameters_limit", parameterLimitDocs, "parameterLimitId");
+        safeUpsert("iiot_source_table_mapping", sourceMappings, "mappingId");
         
-        logInfo("Master data seeded for " + equipmentDocs.length + " equipment");
-        logInfo("  Parameters created: " + parameterDocs.length);
-        logInfo("  Limits created: " + parameterLimitDocs.length);
-        logInfo("  Mappings created: " + sourceMappings.length);
+        logInfo("Master data seeded: " + equipmentDocs.length + " equipment");
     } catch (e) {
         logInfo("ERROR in seedMasterData: " + e.message);
     }
 }
 
 function seedIngestionData() {
-    logInfo("Seeding ingestion data for " + EQUIPMENT_DEFS.length + " equipment...");
+    logInfo("Seeding ingestion data...");
     try {
         var allProducts = db.iiot_product_master.find({ tenantId: TENANT_ID, isActive: true }).toArray();
         if (allProducts.length === 0) {
-            logInfo("WARNING: No products found. Skipping ingestion data.");
+            logInfo("No products found. Skipping ingestion data.");
             return;
         }
         
         var baseDate = new Date("2026-07-01T00:00:00Z");
-
+        var maxEquipment = Math.min(EQUIPMENT_DEFS.length, 20); // Only process 20 equipment for data
+        
+        logInfo("Processing " + maxEquipment + " equipment (out of " + EQUIPMENT_DEFS.length + ")");
+        
         var checkpointDocs = [];
         var jobRunDocs = [];
         var batchSummaryDocs = [];
-
-        // Process equipment in batches
-        var maxEquipment = Math.min(EQUIPMENT_DEFS.length, 30); // Process first 30 for performance
-        var batchSize = 10;
-        logInfo("Processing " + maxEquipment + " equipment (out of " + EQUIPMENT_DEFS.length + ")");
+        var totalCppRecords = 0;
+        var totalAlarmRecords = 0;
 
         for (var eqIdx = 0; eqIdx < maxEquipment; eqIdx++) {
             var eq = EQUIPMENT_DEFS[eqIdx];
             
-            if (eqIdx % batchSize === 0 && eqIdx > 0) {
-                logInfo("  Processing equipment " + (eqIdx) + "/" + maxEquipment);
+            if (eqIdx % 5 === 0 && eqIdx > 0) {
+                logInfo("  Processing equipment " + eqIdx + "/" + maxEquipment);
             }
             
             var cppCollection = getTimeSeriesCppCollection(eq.equipmentId);
             var alarmCollection = getTimeSeriesAlarmCollection(eq.equipmentId);
+            
+            // Ensure collections exist
+            ensureCollection(cppCollection);
+            ensureCollection(alarmCollection);
 
             var cppDocs = [];
             var alarmEventDocs = [];
@@ -736,51 +460,25 @@ function seedIngestionData() {
                 var batchNo = "B" + pad2(eqIdx + 1) + "-2026-" + pad2(batchIdx);
                 var lotNo = "L" + pad2(batchIdx) + "-" + pad2(eqIdx + 1);
                 var batchStart = addMinutes(baseDate, eqIdx * 45 + batchIdx * 25);
-                var operatorName = batchIdx % 2 === 0 ? "RAJESH" : "SURESH";
 
                 for (var pointIdx = 0; pointIdx < CPP_POINTS_PER_BATCH; pointIdx++) {
                     cppSeq += 1;
                     var observedAt = addMinutes(batchStart, pointIdx * 2);
                     
-                    // Generate equipment-specific metrics
-                    var eqType = eq.equipmentType;
-                    var metrics = {};
+                    // Generate simple metrics
+                    var metrics = {
+                        temperature: Number((25.0 + (eqIdx % 5) * 0.5 + (pointIdx % 3) * 0.3).toFixed(2)),
+                        pressure: Number((1.0 + (eqIdx % 3) * 0.1 + (pointIdx % 2) * 0.05).toFixed(2))
+                    };
                     
+                    // Add equipment-specific metrics
+                    var eqType = eq.equipmentType;
                     if (eqType === "RMG") {
-                        metrics = {
-                            temperature: Number((25.0 + (eqIdx % 5) * 0.5 + (pointIdx % 3) * 0.3).toFixed(2)),
-                            pressure: Number((1.0 + (eqIdx % 3) * 0.1 + (pointIdx % 2) * 0.05).toFixed(2)),
-                            impellerSpeed: Number((150.0 + (eqIdx % 10) * 5.0 + (pointIdx % 4) * 2.0).toFixed(2)),
-                            chopperSpeed: Number((3000.0 + (eqIdx % 8) * 100.0 + (pointIdx % 3) * 50.0).toFixed(2))
-                        };
+                        metrics.impellerSpeed = Number((150.0 + (eqIdx % 10) * 5.0 + (pointIdx % 4) * 2.0).toFixed(2));
+                        metrics.chopperSpeed = Number((3000.0 + (eqIdx % 8) * 100.0 + (pointIdx % 3) * 50.0).toFixed(2));
                     } else if (eqType === "FBD") {
-                        metrics = {
-                            temperature: Number((45.0 + (eqIdx % 5) * 1.0 + (pointIdx % 3) * 0.5).toFixed(2)),
-                            pressure: Number((0.5 + (eqIdx % 3) * 0.1 + (pointIdx % 2) * 0.03).toFixed(2)),
-                            airFlow: Number((500.0 + (eqIdx % 8) * 25.0 + (pointIdx % 3) * 10.0).toFixed(2)),
-                            inletTemp: Number((70.0 + (eqIdx % 5) * 2.0 + (pointIdx % 3) * 1.0).toFixed(2))
-                        };
-                    } else if (eqType === "Comill") {
-                        metrics = {
-                            temperature: Number((22.0 + (eqIdx % 4) * 0.5 + (pointIdx % 3) * 0.2).toFixed(2)),
-                            pressure: Number((0.8 + (eqIdx % 3) * 0.1 + (pointIdx % 2) * 0.04).toFixed(2)),
-                            impellerRPM: Number((2000.0 + (eqIdx % 12) * 100.0 + (pointIdx % 4) * 50.0).toFixed(2)),
-                            feedRate: Number((50.0 + (eqIdx % 6) * 5.0 + (pointIdx % 3) * 2.0).toFixed(2))
-                        };
-                    } else if (eqType === "Blender") {
-                        metrics = {
-                            temperature: Number((20.0 + (eqIdx % 4) * 0.5 + (pointIdx % 3) * 0.2).toFixed(2)),
-                            pressure: Number((0.3 + (eqIdx % 3) * 0.1 + (pointIdx % 2) * 0.02).toFixed(2)),
-                            rotationSpeed: Number((20.0 + (eqIdx % 6) * 2.0 + (pointIdx % 3) * 1.0).toFixed(2)),
-                            blendTime: Number((15.0 + (eqIdx % 5) * 2.0 + (pointIdx % 4) * 0.5).toFixed(2))
-                        };
-                    } else if (eqType === "Compression") {
-                        metrics = {
-                            temperature: Number((28.0 + (eqIdx % 4) * 0.5 + (pointIdx % 3) * 0.2).toFixed(2)),
-                            pressure: Number((2.0 + (eqIdx % 5) * 0.2 + (pointIdx % 3) * 0.1).toFixed(2)),
-                            compressionForce: Number((15.0 + (eqIdx % 8) * 1.0 + (pointIdx % 4) * 0.5).toFixed(2)),
-                            turretSpeed: Number((30.0 + (eqIdx % 6) * 2.0 + (pointIdx % 3) * 1.0).toFixed(2))
-                        };
+                        metrics.airFlow = Number((500.0 + (eqIdx % 8) * 25.0 + (pointIdx % 3) * 10.0).toFixed(2));
+                        metrics.inletTemp = Number((70.0 + (eqIdx % 5) * 2.0 + (pointIdx % 3) * 1.0).toFixed(2));
                     }
 
                     var cppDoc = {
@@ -795,22 +493,14 @@ function seedIngestionData() {
                             batchNo: batchNo,
                             lotNo: lotNo,
                             productName: product.productName,
-                            operatorName: operatorName,
                             equipmentType: eq.equipmentType,
                             status: pointIdx < CPP_POINTS_PER_BATCH - 1 ? "RUNNING" : "STOP",
-                            hierarchy: {
-                                plant: eq.plantId,
-                                block: eq.blockId,
-                                area: eq.areaId,
-                                room: eq.roomId,
-                                fullPath: eq.hierarchy.fullPath
-                            }
+                            hierarchy: eq.hierarchy
                         },
                         source: {
                             tableName: "SKPharma::CDSSKPharma.B_UDA_" + eq.equipmentCode,
                             sourceSeqId: cppSeq,
-                            lastModifiedTime: toIsoDate(observedAt),
-                            machineDate: observedAt.toISOString().slice(0, 19).replace("T", " ")
+                            lastModifiedTime: toIsoDate(observedAt)
                         },
                         metrics: metrics,
                         ingestedAt: now()
@@ -818,6 +508,7 @@ function seedIngestionData() {
 
                     cppDocs.push(cppDoc);
                     latestCpp = cppDoc;
+                    totalCppRecords++;
                 }
 
                 for (var alarmIdx = 0; alarmIdx < ALARMS_PER_BATCH; alarmIdx++) {
@@ -825,7 +516,7 @@ function seedIngestionData() {
                     var eventAt = addMinutes(batchStart, 3 + alarmIdx * 8);
                     var isAlarm = alarmIdx !== ALARMS_PER_BATCH - 1;
                     
-                    var eventData = {
+                    alarmEventDocs.push({
                         eventAt: toIsoDate(eventAt),
                         meta: {
                             tenantId: TENANT_ID,
@@ -839,13 +530,7 @@ function seedIngestionData() {
                             productName: product.productName,
                             equipmentType: eq.equipmentType,
                             status: "RUNNING",
-                            hierarchy: {
-                                plant: eq.plantId,
-                                block: eq.blockId,
-                                area: eq.areaId,
-                                room: eq.roomId,
-                                fullPath: eq.hierarchy.fullPath
-                            }
+                            hierarchy: eq.hierarchy
                         },
                         source: {
                             tableName: "SKPharma::CDSSKPharma.AE_" + eq.equipmentCode,
@@ -854,15 +539,14 @@ function seedIngestionData() {
                         },
                         event: {
                             eventCategory: isAlarm ? "ALARM" : "EVENT",
-                            eventCode: isAlarm ? (alarmIdx === 0 ? "TEMP_OVER_RANGE" : "PRESS_OVER_RANGE") : "BATCH_PHASE_CHANGE",
-                            eventText: isAlarm ? (alarmIdx === 0 ? "Temperature above warning threshold" : "Pressure above warning threshold") : "Batch moved to next phase",
-                            severity: isAlarm ? (alarmIdx === 0 ? "HIGH" : "MEDIUM") : "LOW",
+                            eventCode: isAlarm ? "TEMP_OVER_RANGE" : "BATCH_PHASE_CHANGE",
+                            eventText: isAlarm ? "Temperature above warning threshold" : "Batch moved to next phase",
+                            severity: isAlarm ? "HIGH" : "LOW",
                             eventState: isAlarm ? "OPEN" : "INFO"
                         },
                         ingestedAt: now()
-                    };
-                    
-                    alarmEventDocs.push(eventData);
+                    });
+                    totalAlarmRecords++;
                 }
 
                 batchSummaryDocs.push({
@@ -884,34 +568,13 @@ function seedIngestionData() {
                     eventCount: 1,
                     createdAt: now(),
                     updatedAt: now(),
-                    hierarchy: {
-                        plant: eq.plantId,
-                        block: eq.blockId,
-                        area: eq.areaId,
-                        room: eq.roomId,
-                        fullPath: eq.hierarchy.fullPath
-                    }
+                    hierarchy: eq.hierarchy
                 });
             }
 
-            // Insert in batches
-            if (cppDocs.length > 0) {
-                try {
-                    db.getCollection(cppCollection).insertMany(cppDocs, { ordered: false });
-                    logInfo("  Inserted " + cppDocs.length + " CPP docs into " + cppCollection);
-                } catch (e) {
-                    logInfo("  Error inserting CPP docs: " + e.message);
-                }
-            }
-
-            if (alarmEventDocs.length > 0) {
-                try {
-                    db.getCollection(alarmCollection).insertMany(alarmEventDocs, { ordered: false });
-                    logInfo("  Inserted " + alarmEventDocs.length + " Alarm/Event docs into " + alarmCollection);
-                } catch (e) {
-                    logInfo("  Error inserting Alarm docs: " + e.message);
-                }
-            }
+            // Safe inserts with batching
+            safeInsert(cppCollection, cppDocs);
+            safeInsert(alarmCollection, alarmEventDocs);
 
             checkpointDocs.push({
                 checkpointId: "CP-" + TENANT_ID + "-" + eq.equipmentId + "-BATCH_CPP",
@@ -923,12 +586,7 @@ function seedIngestionData() {
                 lastProcessedAt: now(),
                 status: "SUCCESS",
                 updatedAt: now(),
-                hierarchy: {
-                    plant: eq.plantId,
-                    block: eq.blockId,
-                    area: eq.areaId,
-                    room: eq.roomId
-                }
+                hierarchy: eq.hierarchy
             });
 
             checkpointDocs.push({
@@ -941,12 +599,7 @@ function seedIngestionData() {
                 lastProcessedAt: now(),
                 status: "SUCCESS",
                 updatedAt: now(),
-                hierarchy: {
-                    plant: eq.plantId,
-                    block: eq.blockId,
-                    area: eq.areaId,
-                    room: eq.roomId
-                }
+                hierarchy: eq.hierarchy
             });
 
             jobRunDocs.push({
@@ -960,17 +613,11 @@ function seedIngestionData() {
                 recordsWritten: BATCHES_PER_EQUIPMENT * CPP_POINTS_PER_BATCH,
                 recordsSkipped: 0,
                 status: "SUCCESS",
-                errorSummary: null,
                 startedAt: toIsoDate(addMinutes(baseDate, eqIdx * 25)),
                 completedAt: toIsoDate(addMinutes(baseDate, eqIdx * 25 + 4)),
                 createdAt: now(),
                 updatedAt: now(),
-                hierarchy: {
-                    plant: eq.plantId,
-                    block: eq.blockId,
-                    area: eq.areaId,
-                    room: eq.roomId
-                }
+                hierarchy: eq.hierarchy
             });
 
             jobRunDocs.push({
@@ -984,20 +631,14 @@ function seedIngestionData() {
                 recordsWritten: BATCHES_PER_EQUIPMENT * ALARMS_PER_BATCH,
                 recordsSkipped: 0,
                 status: "SUCCESS",
-                errorSummary: null,
                 startedAt: toIsoDate(addMinutes(baseDate, eqIdx * 25 + 6)),
                 completedAt: toIsoDate(addMinutes(baseDate, eqIdx * 25 + 10)),
                 createdAt: now(),
                 updatedAt: now(),
-                hierarchy: {
-                    plant: eq.plantId,
-                    block: eq.blockId,
-                    area: eq.areaId,
-                    room: eq.roomId
-                }
+                hierarchy: eq.hierarchy
             });
 
-            if (latestCpp !== null) {
+            if (latestCpp) {
                 db.iiot_equipment_live_status.updateOne(
                     { tenantId: TENANT_ID, equipmentId: eq.equipmentId },
                     {
@@ -1010,20 +651,14 @@ function seedIngestionData() {
                             roomId: eq.roomId,
                             equipmentType: eq.equipmentType,
                             currentState: "RUNNING",
-                            stateReason: latestCpp.metrics.temperature ? "Temperature: " + latestCpp.metrics.temperature + "°C" : "Running",
+                            stateReason: "Running",
                             lastBatchNo: latestCpp.meta.batchNo,
                             lastLotNo: latestCpp.meta.lotNo,
                             lastSourceSeqId: latestCpp.source.sourceSeqId,
                             lastEventAt: latestCpp.observedAt,
                             heartbeatAt: now(),
                             updatedAt: now(),
-                            hierarchy: {
-                                plant: eq.plantId,
-                                block: eq.blockId,
-                                area: eq.areaId,
-                                room: eq.roomId,
-                                fullPath: eq.hierarchy.fullPath
-                            }
+                            hierarchy: eq.hierarchy
                         },
                         $setOnInsert: { createdAt: now() }
                     },
@@ -1032,36 +667,14 @@ function seedIngestionData() {
             }
         }
 
-        if (checkpointDocs.length > 0) {
-            try {
-                db.iiot_ingestion_checkpoint.insertMany(checkpointDocs, { ordered: false });
-                logInfo("Inserted checkpoints: " + checkpointDocs.length);
-            } catch (e) {
-                logInfo("Error inserting checkpoints: " + e.message);
-            }
-        }
-
-        if (jobRunDocs.length > 0) {
-            try {
-                db.iiot_ingestion_job_run.insertMany(jobRunDocs, { ordered: false });
-                logInfo("Inserted job runs: " + jobRunDocs.length);
-            } catch (e) {
-                logInfo("Error inserting job runs: " + e.message);
-            }
-        }
-
-        if (batchSummaryDocs.length > 0) {
-            try {
-                db.iiot_batch_summary.insertMany(batchSummaryDocs, { ordered: false });
-                logInfo("Inserted batch summaries: " + batchSummaryDocs.length);
-            } catch (e) {
-                logInfo("Error inserting batch summaries: " + e.message);
-            }
-        }
+        // Insert summary data
+        safeInsert("iiot_ingestion_checkpoint", checkpointDocs);
+        safeInsert("iiot_ingestion_job_run", jobRunDocs);
+        safeInsert("iiot_batch_summary", batchSummaryDocs);
         
-        logInfo("Ingestion data seeding completed!");
-        logInfo("  Total CPP records inserted: " + (maxEquipment * BATCHES_PER_EQUIPMENT * CPP_POINTS_PER_BATCH));
-        logInfo("  Total Alarm records inserted: " + (maxEquipment * BATCHES_PER_EQUIPMENT * ALARMS_PER_BATCH));
+        logInfo("Ingestion data completed!");
+        logInfo("  Total CPP records: " + totalCppRecords);
+        logInfo("  Total Alarm records: " + totalAlarmRecords);
     } catch (e) {
         logInfo("ERROR in seedIngestionData: " + e.message);
     }
@@ -1072,56 +685,10 @@ function validateHierarchy() {
     logInfo("Total Equipment: " + EQUIPMENT_DEFS.length);
     logInfo("Expected: " + TOTAL_EQUIPMENT + " (" + PLANT_IDS.length + " Plants × " + BLOCK_IDS.length + " Blocks × " + AREA_IDS.length + " Areas × " + ROOM_IDS.length + " Rooms)");
     
-    // Summary by plant
-    logInfo("Equipment by Plant:");
     PLANT_IDS.forEach(function(plantId) {
-        var plantEquip = EQUIPMENT_DEFS.filter(function(eq) { return eq.plantId === plantId; });
-        logInfo("  " + plantId + ": " + plantEquip.length + " equipment");
-        logInfo("    Expected: " + (BLOCK_IDS.length * AREA_IDS.length * ROOM_IDS.length));
+        var count = EQUIPMENT_DEFS.filter(function(eq) { return eq.plantId === plantId; }).length;
+        logInfo("  " + plantId + ": " + count + " equipment");
     });
-    
-    // Summary by equipment type
-    logInfo("Equipment by Type:");
-    var typeCounts = {};
-    EQUIPMENT_DEFS.forEach(function(eq) {
-        if (!typeCounts[eq.equipmentType]) {
-            typeCounts[eq.equipmentType] = 0;
-        }
-        typeCounts[eq.equipmentType]++;
-    });
-    for (var type in typeCounts) {
-        logInfo("  " + type + ": " + typeCounts[type] + " equipment");
-    }
-    
-    // Validate uniqueness
-    var uniqueIds = {};
-    var duplicates = [];
-    EQUIPMENT_DEFS.forEach(function(eq) {
-        if (uniqueIds[eq.equipmentId]) {
-            duplicates.push(eq.equipmentId);
-        }
-        uniqueIds[eq.equipmentId] = true;
-    });
-    
-    if (duplicates.length > 0) {
-        logInfo("WARNING: Found duplicate equipment IDs: " + duplicates.join(", "));
-    } else {
-        logInfo("All equipment IDs are unique!");
-    }
-    
-    // Validate hierarchy paths
-    var hierarchyPaths = {};
-    EQUIPMENT_DEFS.forEach(function(eq) {
-        var path = eq.plantId + "/" + eq.blockId + "/" + eq.areaId + "/" + eq.roomId;
-        if (!hierarchyPaths[path]) {
-            hierarchyPaths[path] = [];
-        }
-        hierarchyPaths[path].push(eq.equipmentCode);
-    });
-    
-    logInfo("Unique hierarchy paths: " + Object.keys(hierarchyPaths).length);
-    var expectedPaths = PLANT_IDS.length * BLOCK_IDS.length * AREA_IDS.length * ROOM_IDS.length;
-    logInfo("Expected unique paths: " + expectedPaths);
     
     logInfo("=== VALIDATION COMPLETE ===");
     return true;
@@ -1129,19 +696,11 @@ function validateHierarchy() {
 
 function runSeed() {
     logInfo("=== STARTING IIOT SEED ===");
-    logInfo("Configuration:");
-    logInfo("  Plants: " + PLANT_IDS.length + " (" + PLANT_IDS.join(", ") + ")");
-    logInfo("  Blocks per Plant: " + BLOCK_IDS.length + " (" + BLOCK_IDS.join(", ") + ")");
-    logInfo("  Areas per Block: " + AREA_IDS.length + " (" + AREA_IDS.join(", ") + ")");
-    logInfo("  Rooms per Area: " + ROOM_IDS.length + " (" + ROOM_IDS.join(", ") + ")");
-    logInfo("  Total Equipment: " + TOTAL_EQUIPMENT);
-    logInfo("  Batches per Equipment: " + BATCHES_PER_EQUIPMENT);
-    logInfo("  CPP Points per Batch: " + CPP_POINTS_PER_BATCH);
-    logInfo("  Alarms per Batch: " + ALARMS_PER_BATCH);
-    logInfo("  Equipment Types: " + EQUIPMENT_TYPES.join(", "));
+    logInfo("Plants: " + PLANT_IDS.length + ", Blocks: " + BLOCK_IDS.length + ", Areas: " + AREA_IDS.length + ", Rooms: " + ROOM_IDS.length);
+    logInfo("Total Equipment: " + TOTAL_EQUIPMENT);
+    logInfo("Equipment Types: " + EQUIPMENT_TYPES.join(", "));
     
     try {
-        // Validate hierarchy first
         validateHierarchy();
         
         var coreCollections = [
@@ -1154,54 +713,44 @@ function runSeed() {
             "iiot_ingestion_job_run",
             "iiot_equipment_live_status",
             "iiot_batch_summary"
-        ].concat(getTimeSeriesCollections());
-
-        // Reset collections
-        logInfo("Resetting collections...");
-        var resetCount = 0;
-        coreCollections.forEach(function (name) {
-            if (resetCollection(name)) {
-                resetCount++;
-            }
+        ];
+        
+        // Add time-series collections for first 30 equipment
+        var tsCollections = getTimeSeriesCollections();
+        var allCollections = coreCollections.concat(tsCollections);
+        
+        logInfo("Resetting " + allCollections.length + " collections...");
+        allCollections.forEach(function(name) {
+            resetCollection(name);
         });
-        logInfo("Reset " + resetCount + " collections");
-
-        // Create indexes
+        
         createIndexes();
-        
-        // Seed master data
         seedMasterData();
-        
-        // Seed ingestion data
         seedIngestionData();
-
+        
         logInfo("=== SEED COMPLETED ===");
         logInfo("Database: " + databaseName);
-        logInfo("Total Equipment Defined: " + EQUIPMENT_DEFS.length);
-        logInfo("Total Batches (all equipment): " + (EQUIPMENT_DEFS.length * BATCHES_PER_EQUIPMENT));
-        logInfo("Total CPP Records (all equipment): " + (EQUIPMENT_DEFS.length * BATCHES_PER_EQUIPMENT * CPP_POINTS_PER_BATCH));
-        logInfo("Total Alarm Records (all equipment): " + (EQUIPMENT_DEFS.length * BATCHES_PER_EQUIPMENT * ALARMS_PER_BATCH));
-        logInfo("Note: Only first 30 equipment have actual data inserted for performance");
+        logInfo("Total Equipment: " + EQUIPMENT_DEFS.length);
         
+        // Show counts
+        var collections = db.getCollectionNames().filter(function(name) { 
+            return name.startsWith('iiot_') || name === 'products';
+        });
         logInfo("Collection counts:");
-        coreCollections.forEach(function (c) {
+        collections.forEach(function(name) {
             try {
-                var count = db.getCollection(c).countDocuments({});
-                print(" - " + c + ": " + count);
-            } catch (e) {
-                print(" - " + c + ": ERROR (" + e.message + ")");
+                var count = db.getCollection(name).countDocuments({});
+                print(" - " + name + ": " + count);
+            } catch(e) {
+                // Skip
             }
         });
     } catch (e) {
-        logInfo("FATAL ERROR in runSeed: " + e.message);
-        logInfo("Stack trace: " + e.stack);
+        logInfo("FATAL ERROR: " + e.message);
         quit(1);
     }
 }
 
-// Execute the seed
 runSeed();
-
-// Final status
-print("[IIOT-SEED] Script execution completed.");
+print("[IIOT-SEED] Script completed.");
 quit(0);
