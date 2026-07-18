@@ -27,9 +27,10 @@ Master Data Management [e.g Module]
         5.5 Manage User Assignments to Groups
         5.6 Password Management
     6. IIOT Master Data Management
-        6.1 Manage Assets
-        6.2 Manage Assets Tags
-        6.3 Manage Asset Thresholds
+        6.1 Manage Equipments
+        6.2 Manage Critical parameter
+        6.3 Manage Critical parameter Limit
+        6.4 Manage Product Master
     7. Audit & Reporting
         7.1 Audit Logs
         7.2 Reports

@@ -1040,33 +1040,32 @@ ensureIndex('id_sequence_mappings', { collectionName: 1, fieldName: 1 }, { uniqu
 
 logInfo('Seeding default data...');
 
-var manufacturingBlockId = ObjectId('648c71b2a3b4e21a2c3d9101');
-var warehouseBlockId = ObjectId('648c71b2a3b4e21a2c3d9102');
-var utilityBlockId = ObjectId('648c71b2a3b4e21a2c3d9103');
-var qualityControlBlockId = ObjectId('648c71b2a3b4e21a2c3d9104');
+var manufacturingBlockId = "BLK-0001";
+var warehouseBlockId = "BLK-0002";
+var utilityBlockId = "BLK-0003";
+var qualityControlBlockId = "BLK-0004";
 
-var dispensingAreaId = ObjectId('648c71b2a3b4e21a2c3d9201');
-var compressionAreaId = ObjectId('648c71b2a3b4e21a2c3d9202');
-var packingAreaId = ObjectId('648c71b2a3b4e21a2c3d9203');
-var rawMaterialAreaId = ObjectId('648c71b2a3b4e21a2c3d9204');
-var finishedGoodsAreaId = ObjectId('648c71b2a3b4e21a2c3d9205');
-var purifiedWaterAreaId = ObjectId('648c71b2a3b4e21a2c3d9206');
-var hvacAreaId = ObjectId('648c71b2a3b4e21a2c3d9207');
-var chemicalTestingAreaId = ObjectId('648c71b2a3b4e21a2c3d9208');
-var microbiologyAreaId = ObjectId('648c71b2a3b4e21a2c3d9209');
-var assetObjectId = ObjectId('648c71b2a3b4e21a2c3d8001');
-var tagObjectId = ObjectId('648c71b2a3b4e21a2c3d8002');
-
+var dispensingAreaId = "AREA-0001";
+var compressionAreaId = "AREA-0002";
+var packingAreaId = "AREA-0001";
+var rawMaterialAreaId = "AREA-0004";
+var finishedGoodsAreaId = "AREA-0005";
+var purifiedWaterAreaId = "AREA-0006";
+var hvacAreaId = "AREA-0007";
+var chemicalTestingAreaId = "AREA-0008";
+var microbiologyAreaId = "AREA-0009";
+var assetObjectId = "AREA-0010";
+var tagObjectId = "AREA-0011";
 db.mdm_tenants.updateOne(
     {
         tenantId: 'TNT-0001'
     },
     {
         $set: {
-            companyName: 'NovaCrest Pharmaceuticals Ltd.',
-            domain: 'https://novacrest.pharmacloud.com',
+            companyName: 'Adavis Technologies Ltd.',
+            domain: 'https://adavis.technologies.com',
             companyCode: 'NCP',
-            contactEmail: 'compliance@novacrest.com',
+            contactEmail: 'compliance@adavis.com',
             isActive: true,
             updatedAt: ISODate()
         },
@@ -1088,7 +1087,7 @@ db.mdm_plants.updateOne(
     {
         $set: {
             tenantId: 'TNT-0001',
-            plantName: 'Adavis Formulation Plant - Hyderabad',
+            plantName: 'Formulation Plant - Hyderabad',
             plantCode: 'HYD-01',
             type: 'Manufacturing',
             address: {
@@ -1119,7 +1118,7 @@ db.mdm_plants.updateOne(
     {
         $set: {
             tenantId: 'TNT-0001',
-            plantName: 'Adavis API Plant - Visakhapatnam',
+            plantName: 'API Plant - Visakhapatnam',
             plantCode: 'VZG-01',
             type: 'Manufacturing',
             address: {
@@ -1673,6 +1672,7 @@ db.auth_users.updateOne(
     { upsert: true }
 );
 
+
 // ============================================
 // Seed - IT_ADMIN
 // ============================================
@@ -1720,6 +1720,104 @@ db.auth_users.updateOne(
     { upsert: true }
 );
 
+
+// ============================================
+// Seed - Kishore User
+// ============================================
+
+db.mdm_user_profiles.updateOne(
+    { userId: 'kishoreginguru' },
+    {
+        $set: {
+            userTrackId: 'USR-0003',
+            tenantId: 'TNT-0001',
+            firstName: 'Kishore',
+            lastName: 'Ginguru',
+            phoneNumber: '+91-9000000002',
+            title: 'IT Administrator',
+            userType: 'INTERNAL_EMPLOYEE',
+            email: 'kishoreginguru@gmail.com',
+            empId: 'EMP-00003',
+            isActive: true,
+            isBlocked: false,
+            isExternal: false,
+            updatedAt: ISODate()
+        },
+        $setOnInsert: {
+            createdAt: ISODate('2026-03-01T10:00:00Z')
+        }
+    },
+    { upsert: true }
+);
+
+db.auth_users.updateOne(
+    { userId: 'kishoreginguru' },
+    {
+        $set: {
+            username: 'kishoreginguru',
+            email: 'kishoreginguru@gmail.com',
+            status: 'ACTIVE',
+            isLocked: false,
+            failedAttempts: 0,
+            updatedAt: ISODate()
+        },
+        $setOnInsert: {
+            createdAt: ISODate('2026-03-01T10:00:00Z')
+        }
+    },
+    { upsert: true }
+);
+
+
+// ============================================
+// Seed - Pallavi User
+// ============================================
+
+db.mdm_user_profiles.updateOne(
+    { userId: 'pallu543' },
+    {
+        $set: {
+            userTrackId: 'USR-0004',
+            tenantId: 'TNT-0001',
+            firstName: 'Pallavi Shetty',
+            lastName: 'Shetty',
+            phoneNumber: '+91-9000000002',
+            title: 'IT Administrator',
+            userType: 'INTERNAL_EMPLOYEE',
+            email: 'pallu543@gmail.com',
+            empId: 'EMP-00004',
+            isActive: true,
+            isBlocked: false,
+            isExternal: false,
+            updatedAt: ISODate()
+        },
+        $setOnInsert: {
+            createdAt: ISODate('2026-03-01T10:00:00Z')
+        }
+    },
+    { upsert: true }
+);
+
+db.auth_users.updateOne(
+    { userId: 'pallu543' },
+    {
+        $set: {
+            username: 'pallu543',
+            email: 'pallu543@gmail.com',
+            status: 'ACTIVE',
+            isLocked: false,
+            failedAttempts: 0,
+            updatedAt: ISODate()
+        },
+        $setOnInsert: {
+            createdAt: ISODate('2026-03-01T10:00:00Z')
+        }
+    },
+    { upsert: true }
+);
+
+
+
 // ============================================
 // SUPER_ADMIN Credentials
 // ============================================
@@ -1762,11 +1860,48 @@ db.mdm_user_auth_credentials.updateOne(
     { upsert: true }
 );
 
+db.mdm_user_auth_credentials.updateOne(
+    { userId: 'kishoreginguru' },
+    {
+        $set: {
+            email: 'kishoreginguru@gmail.com',
+            passwordHash: DEFAULT_ADAVIS_PASSWORD_HASH,
+            mustChangePassword: false,
+            passwordUpdatedAt: ISODate(),
+            updatedAt: ISODate()
+        },
+        $setOnInsert: {
+            createdAt: ISODate('2026-03-01T10:05:00Z')
+        }
+    },
+    { upsert: true }
+);
+
+
+db.mdm_user_auth_credentials.updateOne(
+    { userId: 'pallu543' },
+    {
+        $set: {
+            email: 'pallu543@gmail.com',
+            passwordHash: DEFAULT_ADAVIS_PASSWORD_HASH,
+            mustChangePassword: false,
+            passwordUpdatedAt: ISODate(),
+            updatedAt: ISODate()
+        },
+        $setOnInsert: {
+            createdAt: ISODate('2026-03-01T10:05:00Z')
+        }
+    },
+    { upsert: true }
+);
+
+
 var roleSeed = [
     {
         roleId: 'ROLE-0001',
         tenantId: 'TNT-0001',
         roleName: 'Platform Super Administrator',
+        description: 'Platform Super Administrator',
         roleCode: 'SUPER_ADMIN',
         isActive: true,
         createdAt: ISODate('2026-01-20T10:30:00Z')
@@ -1775,6 +1910,7 @@ var roleSeed = [
         roleId: 'ROLE-0002',
         tenantId: 'TNT-0001',
         roleName: 'IT Administrator',
+        description: 'IT Administrator',
         roleCode: 'IT_ADMIN',
         isActive: true,
         createdAt: ISODate('2026-01-20T10:30:00Z')
@@ -1783,6 +1919,7 @@ var roleSeed = [
         roleId: 'ROLE-0003',
         tenantId: 'TNT-0001',
         roleName: 'Plant Administrator',
+        description: 'Plant Administrator',
         roleCode: 'PLANT_ADMIN',
         isActive: true,
         createdAt: ISODate('2026-01-20T10:30:00Z')
@@ -1791,6 +1928,7 @@ var roleSeed = [
         roleId: 'ROLE-0004',
         tenantId: 'TNT-0001',
         roleName: 'Master Data Steward',
+        description: 'Master Data Steward',
         roleCode: 'MASTER_DATA_STEWARD',
         isActive: true,
         createdAt: ISODate('2026-01-20T10:30:00Z')
@@ -1799,6 +1937,7 @@ var roleSeed = [
         roleId: 'ROLE-0005',
         tenantId: 'TNT-0001',
         roleName: 'QA Manager',
+        description: 'QA Manager',
         roleCode: 'QA_MANAGER',
         isActive: true,
         createdAt: ISODate('2026-01-20T10:30:00Z')
@@ -1807,6 +1946,7 @@ var roleSeed = [
         roleId: 'ROLE-0006',
         tenantId: 'TNT-0001',
         roleName: 'QC Manager',
+        description: 'QC Manager',
         roleCode: 'QC_MANAGER',
         isActive: true,
         createdAt: ISODate('2026-01-20T10:30:00Z')
@@ -1815,6 +1955,7 @@ var roleSeed = [
         roleId: 'ROLE-0007',
         tenantId: 'TNT-0001',
         roleName: 'Compliance Officer',
+        description: 'Compliance Officer',
         roleCode: 'COMPLIANCE_OFFICER',
         isActive: true,
         createdAt: ISODate('2026-01-20T10:30:00Z')
@@ -1823,6 +1964,7 @@ var roleSeed = [
         roleId: 'ROLE-0008',
         tenantId: 'TNT-0001',
         roleName: 'Production Operator',
+        description: 'Production Operator',
         roleCode: 'PRODUCTION_OPERATOR',
         isActive: true,
         createdAt: ISODate('2026-01-20T10:30:00Z')
@@ -1831,6 +1973,7 @@ var roleSeed = [
         roleId: 'ROLE-0009',
         tenantId: 'TNT-0001',
         roleName: 'Shift Supervisor',
+        description: 'Shift Supervisor',
         roleCode: 'SHIFT_SUPERVISOR',
         isActive: true,
         createdAt: ISODate('2026-01-20T10:30:00Z')
@@ -1839,6 +1982,7 @@ var roleSeed = [
         roleId: 'ROLE-0010',
         tenantId: 'TNT-0001',
         roleName: 'Maintenance Technician',
+        description: 'Maintenance Technician',
         roleCode: 'MAINTENANCE_TECHNICIAN',
         isActive: true,
         createdAt: ISODate('2026-01-20T10:30:00Z')
@@ -1847,6 +1991,7 @@ var roleSeed = [
         roleId: 'ROLE-0011',
         tenantId: 'TNT-0001',
         roleName: 'Automation Engineer',
+        description: 'Automation Engineer',
         roleCode: 'AUTOMATION_ENGINEER',
         isActive: true,
         createdAt: ISODate('2026-01-20T10:30:00Z')
@@ -1855,6 +2000,7 @@ var roleSeed = [
         roleId: 'ROLE-0012',
         tenantId: 'TNT-0001',
         roleName: 'Utilities Engineer',
+        description: 'Utilities Engineer',
         roleCode: 'UTILITIES_ENGINEER',
         isActive: true,
         createdAt: ISODate('2026-01-20T10:30:00Z')
@@ -1863,6 +2009,7 @@ var roleSeed = [
         roleId: 'ROLE-0013',
         tenantId: 'TNT-0001',
         roleName: 'Supply Chain Manager',
+        description: 'Supply Chain Manager',
         roleCode: 'SUPPLY_CHAIN_MANAGER',
         isActive: true,
         createdAt: ISODate('2026-01-20T10:30:00Z')
@@ -1871,6 +2018,7 @@ var roleSeed = [
         roleId: 'ROLE-0014',
         tenantId: 'TNT-0001',
         roleName: 'Document Controller',
+        description: 'Document Controller',
         roleCode: 'DOCUMENT_CONTROLLER',
         isActive: true,
         createdAt: ISODate('2026-01-20T10:30:00Z')
@@ -1879,6 +2027,7 @@ var roleSeed = [
         roleId: 'ROLE-0015',
         tenantId: 'TNT-0001',
         roleName: 'IIOT Administrator',
+        description: 'IIOT Administrator',
         roleCode: 'IIOT_ADMIN',
         isActive: true,
         createdAt: ISODate('2026-01-20T10:30:00Z')
@@ -1896,6 +2045,7 @@ var groupSeed = [
         groupId: 'GRP-0001',
         tenantId: 'TNT-0001',
         groupName: 'Platform Administrators',
+        description: 'Platform Administrators',
         groupCode: 'PLATFORM_ADMIN',
         isActive: true,
         createdAt: ISODate('2026-01-20T11:00:00Z')
@@ -1904,6 +2054,7 @@ var groupSeed = [
         groupId: 'GRP-0002',
         tenantId: 'TNT-0001',
         groupName: 'IT Administrators',
+        description: 'IT Administrators',
         groupCode: 'IT_ADMIN',
         isActive: true,
         createdAt: ISODate('2026-01-20T11:00:00Z')
@@ -1912,6 +2063,7 @@ var groupSeed = [
         groupId: 'GRP-0003',
         tenantId: 'TNT-0001',
         groupName: 'Plant Administration',
+        description: 'Plant Administration',
         groupCode: 'PLANT_ADMIN',
         isActive: true,
         createdAt: ISODate('2026-01-20T11:00:00Z')
@@ -1920,6 +2072,7 @@ var groupSeed = [
         groupId: 'GRP-0004',
         tenantId: 'TNT-0001',
         groupName: 'MDM Governance',
+        description: 'MDM Governance',
         groupCode: 'MDM_GOVERNANCE',
         isActive: true,
         createdAt: ISODate('2026-01-20T11:00:00Z')
@@ -1928,6 +2081,7 @@ var groupSeed = [
         groupId: 'GRP-0005',
         tenantId: 'TNT-0001',
         groupName: 'Quality and Compliance',
+        description: 'Quality and Compliance',
         groupCode: 'QUALITY_COMPLIANCE',
         isActive: true,
         createdAt: ISODate('2026-01-20T11:00:00Z')
@@ -1936,6 +2090,7 @@ var groupSeed = [
         groupId: 'GRP-0006',
         tenantId: 'TNT-0001',
         groupName: 'Production Operations',
+        description: 'Production Operations',
         groupCode: 'PRODUCTION_OPERATIONS',
         isActive: true,
         createdAt: ISODate('2026-01-20T11:00:00Z')
@@ -1944,6 +2099,7 @@ var groupSeed = [
         groupId: 'GRP-0007',
         tenantId: 'TNT-0001',
         groupName: 'Maintenance and Engineering',
+        description: 'Maintenance and Engineering',
         groupCode: 'MAINTENANCE_ENGINEERING',
         isActive: true,
         createdAt: ISODate('2026-01-20T11:00:00Z')
@@ -1952,6 +2108,7 @@ var groupSeed = [
         groupId: 'GRP-0008',
         tenantId: 'TNT-0001',
         groupName: 'Supply Chain Operations',
+        description: 'Supply Chain Operations',
         groupCode: 'SUPPLY_CHAIN',
         isActive: true,
         createdAt: ISODate('2026-01-20T11:00:00Z')
@@ -1960,6 +2117,7 @@ var groupSeed = [
         groupId: 'GRP-0009',
         tenantId: 'TNT-0001',
         groupName: 'Document Control',
+        description: 'Document Control',
         groupCode: 'DOCUMENT_CONTROL',
         isActive: true,
         createdAt: ISODate('2026-01-20T11:00:00Z')
@@ -1968,6 +2126,7 @@ var groupSeed = [
         groupId: 'GRP-0010',
         tenantId: 'TNT-0001',
         groupName: 'IIOT Operations',
+        description: 'IIOT Operations',
         groupCode: 'IIOT_OPERATIONS',
         isActive: true,
         createdAt: ISODate('2026-01-20T11:00:00Z')
@@ -2056,6 +2215,22 @@ upsertOne('mdm_user_assignments_to_user_groups', { userId: 'SUPER_ADMIN', groupI
     assignedBy: 'SYSTEM'
 });
 
+upsertOne('mdm_user_assignments_to_user_groups', { userId: 'kishoreginguru', groupId: platformAdminGroupId }, {
+    userId: 'kishoreginguru',
+    groupId: platformAdminGroupId,
+    isActive: true,
+    assignedAt: ISODate('2026-03-01T10:10:00Z'),
+    assignedBy: 'SYSTEM'
+});
+
+upsertOne('mdm_user_assignments_to_user_groups', { userId: 'pallu543', groupId: platformAdminGroupId }, {
+    userId: 'pallu543',
+    groupId: platformAdminGroupId,
+    isActive: true,
+    assignedAt: ISODate('2026-03-01T10:10:00Z'),
+    assignedBy: 'SYSTEM'
+});
+
 upsertOne('mdm_user_context_assignments', { assignmentId: 'ASGN-000001' }, {
     assignmentId: 'ASGN-000001',
     tenantId: 'TNT-0001',
@@ -2076,6 +2251,25 @@ upsertOne('mdm_user_context_assignments', { assignmentId: 'ASGN-000002' }, {
     isActive: true
 });
 
+upsertOne('mdm_user_context_assignments', { assignmentId: 'ASGN-000003' }, {
+    assignmentId: 'ASGN-000003',
+    tenantId: 'TNT-0001',
+    userId: 'USR-0003',
+    plantId: 'PLNT-0001',
+    departmentId: 'DEP-0002',
+    groupId: platformAdminGroupId,
+    isActive: true
+});
+
+upsertOne('mdm_user_context_assignments', { assignmentId: 'ASGN-000004' }, {
+    assignmentId: 'ASGN-000004',
+    tenantId: 'TNT-0001',
+    userId: 'USR-0004',
+    plantId: 'PLNT-0001',
+    departmentId: 'DEP-0002',
+    groupId: platformAdminGroupId,
+    isActive: true
+});
 
 upsertOne('mdm_role_permissions', { roleId: superAdminRoleId, moduleId: 'MOD-0001', version: 1 },
     buildRolePermissionDocument('TNT-0001', superAdminRoleId, 'MOD-0001', screenSeed, featureSeed)
@@ -2092,7 +2286,7 @@ upsertOne('mdm_licenses', { tenantId: 'TNT-0001' }, {
     },
     modules: ['MOD-MDM', 'MOD-IIOT'],
     maxUsers: 500,
-    currentUsers: 1,
+    currentUsers: 4,
     status: 'ACTIVE',
     metadata: {
         tenantId: 'TNT-0001',
@@ -2110,9 +2304,11 @@ logInfo('Initializing auto-increment ID sequences...');
 var sequenceDefinitions = [
     { sequenceName: 'tenantId', collectionName: 'mdm_tenants', fieldName: 'tenantId', prefix: 'TNT', padLength: 4, seedValues: ['TNT-0001'] },
     { sequenceName: 'plantId', collectionName: 'mdm_plants', fieldName: 'plantId', prefix: 'PLNT', padLength: 4, seedValues: ['PLNT-0001', 'PLNT-0002'] },
+    { sequenceName: 'blockId', collectionName: 'mdm_blocks', fieldName: 'blockId', prefix: 'BLK', padLength: 4, seedValues: ['BLK-0001', 'BLK-0002', 'BLK-0003', 'BLK-0004' ] },
+    { sequenceName: 'areaId', collectionName: 'mdm_areas', fieldName: 'areaId', prefix: 'AREA', padLength: 4, seedValues: ['AREA-0001', 'AREA-0002', 'AREA-0003', 'AREA-0004', 'AREA-0005', 'AREA-0006', 'AREA-0007', 'AREA-0008', 'AREA-0009', 'AREA-0010', 'AREA-0011' ] },
     { sequenceName: 'departmentId', collectionName: 'mdm_departments', fieldName: 'departmentId', prefix: 'DEP', padLength: 4, seedValues: ['DEP-0001', 'DEP-0002', 'DEP-0003', 'DEP-0004', 'DEP-0005', 'DEP-0006', 'DEP-0007', 'DEP-0008', 'DEP-0009', 'DEP-0010', 'DEP-0011', 'DEP-0012', 'DEP-0013', 'DEP-0014', 'DEP-0015', 'DEP-0016'] },
     { sequenceName: 'roomId', collectionName: 'mdm_rooms', fieldName: 'roomId', prefix: 'ROOM', padLength: 4, seedValues: ['ROOM-0001', 'ROOM-0002', 'ROOM-0003', 'ROOM-0004', 'ROOM-0005', 'ROOM-0006', 'ROOM-0007', 'ROOM-0008', 'ROOM-0009', 'ROOM-0010', 'ROOM-0011', 'ROOM-0012', 'ROOM-0013', 'ROOM-0014', 'ROOM-0015', 'ROOM-0016', 'ROOM-0017'] },
-    { sequenceName: 'userTrackId', collectionName: 'mdm_user_profiles', fieldName: 'userTrackId', prefix: 'USR', padLength: 4, seedValues: ['USR-0001', 'USR-0002'] },
+    { sequenceName: 'userTrackId', collectionName: 'mdm_user_profiles', fieldName: 'userTrackId', prefix: 'USR', padLength: 4, seedValues: ['USR-0001', 'USR-0002', 'USR-0003', 'USR-0004'] },
     { sequenceName: 'groupId', collectionName: 'mdm_user_groups', fieldName: 'groupId', prefix: 'GRP', padLength: 4, seedValues: ['GRP-0001', 'GRP-0002', 'GRP-0003', 'GRP-0004', 'GRP-0005', 'GRP-0006', 'GRP-0007', 'GRP-0008', 'GRP-0009', 'GRP-0010'] },
     { sequenceName: 'roleId', collectionName: 'mdm_roles', fieldName: 'roleId', prefix: 'ROLE', padLength: 4, seedValues: ['ROLE-0001', 'ROLE-0002', 'ROLE-0003', 'ROLE-0004', 'ROLE-0005', 'ROLE-0006', 'ROLE-0007', 'ROLE-0008', 'ROLE-0009', 'ROLE-0010', 'ROLE-0011', 'ROLE-0012', 'ROLE-0013', 'ROLE-0014', 'ROLE-0015'] },
     { sequenceName: 'moduleId', collectionName: 'mdm_modules', fieldName: 'moduleId', prefix: 'MOD', padLength: 4, seedValues: ['MOD-0001', 'MOD-0002', 'MOD-0003'] },
