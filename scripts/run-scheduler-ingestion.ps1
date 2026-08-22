@@ -10,7 +10,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 # ------------------------------------------------------------
-# Paths
+# Resolve paths
 # ------------------------------------------------------------
 
 $logDir = Join-Path $PSScriptRoot "logs"
@@ -20,8 +20,8 @@ $stdoutLog = Join-Path $stateDir "stdout.log"
 $stderrLog = Join-Path $stateDir "stderr.log"
 $pidFile = Join-Path $stateDir "scheduler-ingestion.pid"
 
-$scriptPath = Join-Path $PSScriptRoot "..\scheduler\run_scheduler_loop.py"
-$backendRoot = Join-Path $PSScriptRoot ".."
+$scriptPath = Join-Path $PSScriptRoot "../scheduler/run_scheduler_loop.py"
+$backendRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 
 # ------------------------------------------------------------
 # Resolve Python executable
@@ -29,18 +29,26 @@ $backendRoot = Join-Path $PSScriptRoot ".."
 
 $pythonCommand = $null
 
-# First try "python"
+# Try "python"
 $pythonPath = Get-Command python -ErrorAction SilentlyContinue
 
 if ($null -ne $pythonPath) {
     $pythonCommand = $pythonPath.Source
 }
 else {
-    # Fallback to Windows Python launcher "py"
-    $pyPath = Get-Command py -ErrorAction SilentlyContinue
+    # Try "python3" - Ubuntu/Linux
+    $python3Path = Get-Command python3 -ErrorAction SilentlyContinue
 
-    if ($null -ne $pyPath) {
-        $pythonCommand = $pyPath.Source
+    if ($null -ne $python3Path) {
+        $pythonCommand = $python3Path.Source
+    }
+    else {
+        # Try Windows Python launcher "py"
+        $pyPath = Get-Command py -ErrorAction SilentlyContinue
+
+        if ($null -ne $pyPath) {
+            $pythonCommand = $pyPath.Source
+        }
     }
 }
 
@@ -50,13 +58,10 @@ Python was not found on this machine.
 
 Please verify Python is installed and available in PATH.
 
-Run one of these commands manually:
+Try:
 
     python --version
-
-or:
-
-    py --version
+    python3 --version
 "@
 }
 
@@ -124,7 +129,7 @@ if (Test-Path $pidFile) {
             Write-Host "Interval : $IntervalSeconds seconds"
             Write-Host ""
             Write-Host "Stop it with:" -ForegroundColor Cyan
-            Write-Host ".\scripts\stop-scheduler-ingestion.ps1"
+            Write-Host "./stop-scheduler-ingestion.ps1"
             Write-Host ""
 
             return
@@ -221,5 +226,5 @@ Write-Host "Logs : $stdoutLog"
 Write-Host "Error: $stderrLog"
 Write-Host ""
 Write-Host "Stop with:" -ForegroundColor Cyan
-Write-Host ".\scripts\stop-scheduler-ingestion.ps1"
+Write-Host "./stop-scheduler-ingestion.ps1"
 Write-Host ""

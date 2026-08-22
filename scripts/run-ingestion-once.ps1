@@ -34,18 +34,26 @@ $backendRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 
 $pythonCommand = $null
 
-# First try "python"
+# Try "python"
 $pythonPath = Get-Command python -ErrorAction SilentlyContinue
 
 if ($null -ne $pythonPath) {
     $pythonCommand = $pythonPath.Source
 }
 else {
-    # Fallback to Windows Python launcher "py"
-    $pyPath = Get-Command py -ErrorAction SilentlyContinue
+    # Try "python3" - Ubuntu/Linux
+    $python3Path = Get-Command python3 -ErrorAction SilentlyContinue
 
-    if ($null -ne $pyPath) {
-        $pythonCommand = $pyPath.Source
+    if ($null -ne $python3Path) {
+        $pythonCommand = $python3Path.Source
+    }
+    else {
+        # Try Windows Python launcher "py"
+        $pyPath = Get-Command py -ErrorAction SilentlyContinue
+
+        if ($null -ne $pyPath) {
+            $pythonCommand = $pyPath.Source
+        }
     }
 }
 
@@ -55,13 +63,10 @@ Python was not found on this machine.
 
 Please verify Python is installed and available in PATH.
 
-Run one of these commands manually:
+Try:
 
     python --version
-
-or:
-
-    py --version
+    python3 --version
 "@
 }
 
@@ -99,10 +104,6 @@ if ($validDatasetIds.Count -eq 0) {
 
 # ------------------------------------------------------------
 # Build mock endpoint
-#
-# IMPORTANT:
-# Use ${SourceApiBaseUrl} so PowerShell does not interpret
-# '?pointname' as part of the variable name.
 # ------------------------------------------------------------
 
 $testDatasetId = $validDatasetIds[0]
@@ -150,7 +151,7 @@ $SourceApiBaseUrl
 
 Start the mock service with:
 
-.\scripts\run-mock-data-service.ps1
+./run-mock-data-service.ps1
 
 Details:
 $($_.Exception.Message)
