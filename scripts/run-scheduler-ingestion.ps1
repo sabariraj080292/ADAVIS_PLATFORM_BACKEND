@@ -17,9 +17,9 @@ $pidFile = Join-Path $stateDir "scheduler-ingestion.pid"
 $scriptPath = Join-Path $PSScriptRoot "..\scheduler\run_scheduler_loop.py"
 $pythonExe = "python3"
 
-if (-not (Test-Path $pythonExe)) {
-    throw "Python executable not found at $pythonExe. Activate the virtual environment first or create it under .venv."
-}
+# if (-not (Test-Path $pythonExe)) {
+#     throw "Python executable not found at $pythonExe. Activate the virtual environment first or create it under .venv."
+# }
 
 New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
 

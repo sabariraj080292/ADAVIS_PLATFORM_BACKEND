@@ -14,9 +14,9 @@ $pidFile = Join-Path $stateDir "mock-data-service.pid"
 $scriptPath = Join-Path $PSScriptRoot "..\data_service_layer\mock_data_service.py"
 $pythonExe = "python3"
 
-if (-not (Test-Path $pythonExe)) {
-    throw "Python executable not found at $pythonExe. Activate the virtual environment first or create it under .venv."
-}
+# if (-not (Test-Path $pythonExe)) {
+#     throw "Python executable not found at $pythonExe. Activate the virtual environment first or create it under .venv."
+# }
 
 New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
 

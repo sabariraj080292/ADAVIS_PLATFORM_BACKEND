@@ -34,9 +34,9 @@ $pythonExe = "python3"
 # Validate Python environment
 # ------------------------------------------------------------
 
-if (-not (Test-Path $pythonExe)) {
-    throw "Python executable not found at '$pythonExe'. Create the backend virtual environment first."
-}
+# if (-not (Test-Path $pythonExe)) {
+#     throw "Python executable not found at '$pythonExe'. Create the backend virtual environment first."
+# }
 
 # ------------------------------------------------------------
 # Validate dataset IDs
