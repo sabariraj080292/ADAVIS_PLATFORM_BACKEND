@@ -15,7 +15,7 @@ $stdoutLog = Join-Path $stateDir "stdout.log"
 $stderrLog = Join-Path $stateDir "stderr.log"
 $pidFile = Join-Path $stateDir "scheduler-ingestion.pid"
 $scriptPath = Join-Path $PSScriptRoot "..\scheduler\run_scheduler_loop.py"
-$pythonExe = Join-Path $PSScriptRoot "..\.venv\Scripts\python.exe"
+$pythonExe = "python3"
 
 if (-not (Test-Path $pythonExe)) {
     throw "Python executable not found at $pythonExe. Activate the virtual environment first or create it under .venv."

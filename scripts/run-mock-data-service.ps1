@@ -12,7 +12,7 @@ $stdoutLog = Join-Path $stateDir "stdout.log"
 $stderrLog = Join-Path $stateDir "stderr.log"
 $pidFile = Join-Path $stateDir "mock-data-service.pid"
 $scriptPath = Join-Path $PSScriptRoot "..\data_service_layer\mock_data_service.py"
-$pythonExe = Join-Path $PSScriptRoot "..\.venv\Scripts\python.exe"
+$pythonExe = "python3"
 
 if (-not (Test-Path $pythonExe)) {
     throw "Python executable not found at $pythonExe. Activate the virtual environment first or create it under .venv."

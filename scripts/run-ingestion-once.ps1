@@ -28,7 +28,7 @@ $ErrorActionPreference = "Stop"
 
 $backendRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 
-$pythonExe = Join-Path $backendRoot ".venv\Scripts\python.exe"
+$pythonExe = "python3"
 
 # ------------------------------------------------------------
 # Validate Python environment
