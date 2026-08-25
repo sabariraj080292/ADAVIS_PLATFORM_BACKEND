@@ -63,6 +63,14 @@ if [[ -f "$REPO_ROOT/data_service_layer/mock_data_service.py" && -f "$REPO_ROOT/
     PYTHON_BIN="python3"
   fi
 
+  # Check if required Python modules are available
+  if ! "$PYTHON_BIN" -c "import pymongo, requests" >/dev/null 2>&1; then
+    echo "  Installing required Python modules (pymongo, requests)..."
+    "$PYTHON_BIN" -m pip install pymongo requests >/dev/null 2>&1 || {
+      echo "  [WARN] Could not install pymongo/requests automatically. Ensure they are installed via 'pip install pymongo requests'."
+    }
+  fi
+
   # Start mock service in background with safety trap
   mkdir -p "$SCRIPT_DIR/logs"
   PYTHONPATH="$REPO_ROOT" "$PYTHON_BIN" -m data_service_layer.mock_data_service > "$SCRIPT_DIR/logs/mock_data_service.log" 2>&1 &
@@ -78,7 +86,9 @@ if [[ -f "$REPO_ROOT/data_service_layer/mock_data_service.py" && -f "$REPO_ROOT/
       --mongo-uri "$HOST_MONGO_URI" \
       --db-name "$DB_NAME" \
       --dataset-ids "$ds" \
-      --once >> "$SCRIPT_DIR/logs/ingestion.log" 2>&1 || true
+      --once >> "$SCRIPT_DIR/logs/ingestion.log" 2>&1 || {
+        echo "    [WARN] Ingestion for $ds encountered an error. Check scripts/logs/ingestion.log"
+      }
   done
 
   # Stop mock service
@@ -92,12 +102,16 @@ $CONTAINER_CLI exec -i "$CONTAINER_NAME" mongosh "$CONTAINER_MONGO_URI" --quiet 
   const collections = [
     'mdm_tenants',
     'mdm_plants',
-    'mdm_users',
+    'auth_users',
+    'mdm_user_profiles',
     'mdm_roles',
     'iiot_equipment_master',
     'iiot_equipment_critical_parameters',
     'iiot_equipment_critical_parameters_limit',
-    'iiot_product_master'
+    'iiot_product_master',
+    'iiot_ingestion_checkpoint',
+    'iiot_ingestion_job_run',
+    'iiot_ts_batch_G5RMG'
   ];
   collections.forEach(col => {
     print('  - ' + col.padEnd(42) + ': ' + db.getCollection(col).countDocuments({}));
