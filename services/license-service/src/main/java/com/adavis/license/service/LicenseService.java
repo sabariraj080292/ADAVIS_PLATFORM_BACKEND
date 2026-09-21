@@ -50,6 +50,11 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import java.security.interfaces.RSAPrivateKey;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.time.temporal.ChronoUnit;
+import java.util.Date;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -61,6 +66,9 @@ public class LicenseService {
 
     @Value("${license.jwt.public-key-path:../../license_generation_module/keys/public_key.pem}")
     private String publicKeyPath;
+
+    @Value("${license.jwt.private-key-path:../../license_generation_module/keys/private_key.pem}")
+    private String privateKeyPath;
 
     @Value("${license.jwt.issuer:ADAVIS}")
     private String expectedIssuer;
@@ -88,10 +96,32 @@ public class LicenseService {
         return switch (actionType) {
             case "ACTIVATE" -> activateLicense(request.getEncryptedLicenseToken(), actor);
             case "UPGRADE", "RENEW" -> upgradeLicense(request.getEncryptedLicenseToken(), actor, reason);
-            case "SUSPEND", "REACTIVATE" -> {
+            case "SUSPEND" -> {
                 License existing = findLicenseByEncryptedToken(request.getEncryptedLicenseToken());
-                String nextStatus = "SUSPEND".equals(actionType) ? "SUSPENDED" : "ACTIVE";
-                updateLicenseStatus(existing.getId(), nextStatus, reason);
+                if ("SUSPENDED".equalsIgnoreCase(existing.getStatus())) {
+                    throw new BusinessException("License is already suspended");
+                }
+                if ("EXPIRED".equalsIgnoreCase(existing.getStatus())) {
+                    throw new BusinessException("Cannot suspend expired license");
+                }
+                if (!"ACTIVE".equalsIgnoreCase(existing.getStatus())) {
+                    throw new BusinessException("Only active licenses can be suspended. Current status: " + existing.getStatus());
+                }
+                updateLicenseStatus(existing.getId(), "SUSPENDED", reason, actor);
+                yield mapToResponse(refreshLicense(existing.getId()));
+            }
+            case "REACTIVATE" -> {
+                License existing = findLicenseByEncryptedToken(request.getEncryptedLicenseToken());
+                if ("ACTIVE".equalsIgnoreCase(existing.getStatus())) {
+                    throw new BusinessException("License is already active");
+                }
+                if ("EXPIRED".equalsIgnoreCase(existing.getStatus())) {
+                    throw new BusinessException("Cannot reactivate expired license. Please renew the license.");
+                }
+                if (!"SUSPENDED".equalsIgnoreCase(existing.getStatus())) {
+                    throw new BusinessException("Only suspended licenses can be reactivated. Current status: " + existing.getStatus());
+                }
+                updateLicenseStatus(existing.getId(), "ACTIVE", reason, actor);
                 yield mapToResponse(refreshLicense(existing.getId()));
             }
             default -> throw new BusinessException("Unsupported actionType: " + actionType);
@@ -109,10 +139,20 @@ public class LicenseService {
         }
         String resolvedLicenseKey = firstNonBlank(stringClaim(claims.get("licenseKey")), encryptedLicenseToken);
 
-        // Idempotent activate: one license per tenant.
+        // Reject duplicate activate if already active; or activate if inactive
         var existingLicense = licenseRepository.findByTenantIdAndIsDeletedFalse(tenantId);
         if (existingLicense.isPresent()) {
-            return mapToResponse(existingLicense.get());
+            License existing = existingLicense.get();
+            if ("ACTIVE".equalsIgnoreCase(existing.getStatus())) {
+                throw new BusinessException("License already activated for this tenant: " + tenantId);
+            }
+            existing.setStatus("ACTIVE");
+            existing.setUpdatedAt(Instant.now());
+            existing.setUpdatedBy(actor);
+            License saved = licenseRepository.save(existing);
+            createHistory(saved, "ACTIVATED", existing.getStatus(), "ACTIVE", null, saved.getMaxUsers(), null, saved.getModules(), null, saved.getExpiryDate(), "License activated", actor);
+            publishAuditEvent(saved, "LICENSE_ACTIVATED", actor, "SUCCESS", null, null, snapshot(saved));
+            return mapToResponse(saved);
         }
 
         Map<String, Object> planClaims = safeMap(claims.get("plan"));
@@ -210,8 +250,7 @@ public class LicenseService {
     }
 
     private LicenseResponse applyTokenUpgrade(License license, Claims tokenClaims, String actor, String reason) {
-
-        if (!"ACTIVE".equals(license.getStatus())) {
+        if (!"ACTIVE".equals(license.getStatus()) && !"EXPIRED".equals(license.getStatus())) {
             throw new BusinessException("Cannot upgrade non-active license. Current status: " + license.getStatus());
         }
 
@@ -296,6 +335,7 @@ public class LicenseService {
             license.setUpgradeCount(0);
         }
         license.setUpgradeCount(license.getUpgradeCount() + 1);
+        license.setStatus("ACTIVE");
         license.setUpdatedAt(Instant.now());
         license.setUpdatedBy(actor);
 
@@ -358,26 +398,33 @@ public class LicenseService {
 
     @Transactional
     public void updateLicenseStatus(String licenseId, String status, String reason) {
+        updateLicenseStatus(licenseId, status, reason, "SYSTEM");
+    }
+
+    @Transactional
+    public void updateLicenseStatus(String licenseId, String status, String reason, String actor) {
         License license = licenseRepository.findById(licenseId)
                 .orElseThrow(() -> new ResourceNotFoundException("License not found: " + licenseId));
 
+        String effectiveActor = (actor != null && !actor.isBlank()) ? actor : "SYSTEM";
         String oldStatus = license.getStatus();
         license.setStatus(status);
         license.setUpdatedAt(Instant.now());
+        license.setUpdatedBy(effectiveActor);
         licenseRepository.save(license);
 
         // Log history
         createHistory(license, "STATUS_CHANGED", oldStatus, status,
                 null, null, null, null,
-                null, null, reason, "SYSTEM");
+                null, null, reason, effectiveActor);
 
         Map<String, Object> before = new HashMap<>();
         before.put("status", oldStatus);
         Map<String, Object> after = new HashMap<>();
         after.put("status", status);
-        publishAuditEvent(license, "LICENSE_STATUS_CHANGED", "SYSTEM", "SUCCESS", reason, before, after);
+        publishAuditEvent(license, "LICENSE_STATUS_CHANGED", effectiveActor, "SUCCESS", reason, before, after);
 
-        log.info("License {} status changed from {} to {}", licenseId, oldStatus, status);
+        log.info("License {} status changed from {} to {} by {}", licenseId, oldStatus, status, effectiveActor);
     }
 
     @Scheduled(cron = "0 0 * * * *") // Run every hour
@@ -400,6 +447,12 @@ public class LicenseService {
 
     public LicenseResponse getActiveLicenseByTenantId(String tenantId) {
         return mapToResponse(getActiveLicenseEntityByTenantId(tenantId));
+    }
+
+    public LicenseResponse getLicenseByTenantId(String tenantId) {
+        License license = licenseRepository.findByTenantIdAndIsDeletedFalse(tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException("License not found for tenant: " + tenantId));
+        return mapToResponse(license);
     }
 
     public ModuleResponse getModulesByTenantId(String tenantId) {
@@ -569,9 +622,41 @@ public class LicenseService {
     }
 
     private License findLicenseByEncryptedToken(String encryptedLicenseToken) {
-        Claims tokenClaims = parseAndValidateLicenseToken(encryptedLicenseToken);
-        String tenantId = tokenClaims.get("tenantId", String.class);
-        return getActiveLicenseEntityByTenantId(tenantId);
+        if (encryptedLicenseToken == null || encryptedLicenseToken.isBlank()) {
+            throw new BusinessException("encryptedLicenseToken is required");
+        }
+        try {
+            Claims tokenClaims = parseAndValidateLicenseToken(encryptedLicenseToken);
+            String tenantId = tokenClaims.get("tenantId", String.class);
+            if (tenantId != null && !tenantId.isBlank()) {
+                return licenseRepository.findByTenantIdAndIsDeletedFalse(tenantId)
+                        .orElseThrow(() -> new ResourceNotFoundException("License not found for tenant: " + tenantId));
+            }
+        } catch (Exception ex) {
+            // Check if raw licenseKey was supplied instead of signed JWT token
+            return licenseRepository.findByLicenseKeyAndIsDeletedFalse(encryptedLicenseToken)
+                    .orElseThrow(() -> new ResourceNotFoundException("License not found for token: " + ex.getMessage()));
+        }
+        throw new ResourceNotFoundException("License not found for token");
+    }
+
+    public String extractTenantIdFromToken(String token) {
+        if (token == null || token.isBlank()) {
+            return null;
+        }
+        try {
+            Claims claims = parseAndValidateLicenseToken(token);
+            return claims.get("tenantId", String.class);
+        } catch (Exception ex) {
+            return licenseRepository.findByLicenseKeyAndIsDeletedFalse(token)
+                    .map(this::resolveTenantId)
+                    .orElse(null);
+        }
+    }
+
+    public String getTenantIdByLicenseId(String licenseId) {
+        License license = refreshLicense(licenseId);
+        return resolveTenantId(license);
     }
 
     private License refreshLicense(String id) {
@@ -631,14 +716,200 @@ public class LicenseService {
         return true;
     }
 
+    @Transactional
+    @CacheEvict(value = {"license", "licenseModules"}, allEntries = true)
+    public LicenseResponse renewTenantLicense(String tenantId, String encryptedLicenseToken,
+                                              Integer validityYears, String planId,
+                                              List<String> modules, Integer maxUsers,
+                                              String reason, String actor) {
+        License license = licenseRepository.findByTenantIdAndIsDeletedFalse(tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException("License not found for tenant: " + tenantId));
+
+        if ("SUSPENDED".equalsIgnoreCase(license.getStatus())) {
+            throw new BusinessException("Cannot renew suspended license. Please reactivate first.");
+        }
+
+        if (encryptedLicenseToken != null && !encryptedLicenseToken.isBlank()) {
+            Claims tokenClaims = parseAndValidateLicenseToken(encryptedLicenseToken);
+            String tokenTenantId = tokenClaims.get("tenantId", String.class);
+            if (tokenTenantId != null && !tokenTenantId.isBlank() && !tenantId.equalsIgnoreCase(tokenTenantId)) {
+                throw new BusinessException("Token tenant mismatch: token is for " + tokenTenantId + " but renewing " + tenantId);
+            }
+            return applyTokenUpgrade(license, tokenClaims, actor, reason);
+        }
+
+        int years = (validityYears != null && validityYears > 0) ? validityYears : 1;
+        Instant now = Instant.now();
+        Instant expiry = (license.getExpiryDate() != null && license.getExpiryDate().isAfter(now))
+                ? license.getExpiryDate().plus(years * 365L, ChronoUnit.DAYS)
+                : now.plus(years * 365L, ChronoUnit.DAYS);
+
+        String effectivePlanId = (planId != null && !planId.isBlank())
+                ? planId
+                : (license.getPlan() != null ? license.getPlan().getPlanId() : "PLAN_ENTERPRISE");
+        String effectivePlanName = (license.getPlan() != null && license.getPlan().getPlanName() != null)
+                ? license.getPlan().getPlanName()
+                : "Enterprise";
+        String effectivePlanType = (license.getPlan() != null && license.getPlan().getPlanType() != null)
+                ? license.getPlan().getPlanType()
+                : "PAID";
+
+        List<String> effectiveModules = (modules != null && !modules.isEmpty())
+                ? modules
+                : (license.getModules() != null && !license.getModules().isEmpty() ? license.getModules() : List.of("MOD-MDM", "MOD-IIOT"));
+
+        Integer effectiveMaxUsers = (maxUsers != null && maxUsers > 0)
+                ? maxUsers
+                : (license.getMaxUsers() != null ? license.getMaxUsers() : 500);
+
+        String generatedToken;
+        try {
+            generatedToken = generateSignedToken(tenantId, effectivePlanId, effectivePlanName, effectivePlanType,
+                    effectiveModules, effectiveMaxUsers, now, expiry);
+        } catch (Exception ex) {
+            log.error("Failed to generate signed license token: {}", ex.getMessage(), ex);
+            throw new BusinessException("Failed to generate signed license token: " + ex.getMessage());
+        }
+
+        String beforeStatus = license.getStatus();
+        Integer beforeMaxUsers = license.getMaxUsers();
+        List<String> beforeModules = license.getModules() != null ? new ArrayList<>(license.getModules()) : Collections.emptyList();
+        Instant beforeExpiry = license.getExpiryDate();
+
+        Map<String, Object> metadata = license.getMetadata() != null ? new HashMap<>(license.getMetadata()) : new HashMap<>();
+        metadata.put("encryptedLicenseToken", generatedToken);
+        metadata.put("tenantId", tenantId);
+        metadata.put("tokenIssuer", expectedIssuer);
+        metadata.put("renewedAt", now.toString());
+        license.setMetadata(metadata);
+        license.setExpiryDate(expiry);
+        license.setMaxUsers(effectiveMaxUsers);
+        license.setModules(effectiveModules);
+        license.setStatus("ACTIVE");
+        license.setUpgradeCount(license.getUpgradeCount() != null ? license.getUpgradeCount() + 1 : 1);
+        license.setUpdatedAt(now);
+        license.setUpdatedBy(actor);
+
+        License savedLicense = licenseRepository.save(license);
+
+        createHistory(savedLicense, "RENEWED", beforeStatus, savedLicense.getStatus(),
+                beforeMaxUsers, savedLicense.getMaxUsers(), beforeModules, savedLicense.getModules(),
+                beforeExpiry, savedLicense.getExpiryDate(), firstNonBlank(reason, "Annual license renewal"), actor);
+
+        publishAuditEvent(savedLicense, "LICENSE_RENEWED", actor, "SUCCESS", null,
+                null, snapshot(savedLicense));
+
+        return mapToResponse(savedLicense);
+    }
+
+    private String generateSignedToken(String tenantId, String planId, String planName, String planType,
+                                       List<String> modules, Integer maxUsers, Instant startDate, Instant expiryDate)
+            throws IOException, GeneralSecurityException {
+        RSAPrivateKey privateKey = loadPrivateKey();
+        Instant now = Instant.now();
+
+        Map<String, Object> planMap = new HashMap<>();
+        planMap.put("planId", planId);
+        planMap.put("planName", planName);
+        planMap.put("planType", planType);
+
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("tenantId", tenantId);
+        claims.put("licenceKey", "LIC-" + tenantId);
+        claims.put("plan", planMap);
+        claims.put("modules", modules);
+        claims.put("maxUsers", maxUsers);
+        claims.put("startDate", startDate.toString());
+        claims.put("expiryDate", expiryDate.toString());
+        claims.put("version", 1);
+
+        return Jwts.builder()
+                .issuer(expectedIssuer)
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(expiryDate))
+                .claims(claims)
+                .signWith(privateKey, Jwts.SIG.RS256)
+                .compact();
+    }
+
+    private RSAPrivateKey loadPrivateKey() throws IOException, GeneralSecurityException {
+        String pem = null;
+
+        List<Path> candidates = List.of(
+                Path.of(privateKeyPath),
+                Path.of("backend/license_generation_module/keys/private_key.pem"),
+                Path.of("backend/license_generation_module/keys_txt/private_key.txt"),
+                Path.of("license_generation_module/keys/private_key.pem"),
+                Path.of("license_generation_module/keys_txt/private_key.txt"),
+                Path.of("ADAVIS_PLATFORM_BACKEND/license_generation_module/keys/private_key.pem"),
+                Path.of("ADAVIS_PLATFORM_BACKEND/license_generation_module/keys_txt/private_key.txt"),
+                Path.of("../license_generation_module/keys/private_key.pem"),
+                Path.of("../license_generation_module/keys_txt/private_key.txt"),
+                Path.of("../../license_generation_module/keys/private_key.pem"),
+                Path.of("../../license_generation_module/keys_txt/private_key.txt")
+        );
+
+        for (Path candidate : candidates) {
+            Path normalized = candidate.toAbsolutePath().normalize();
+            if (Files.exists(normalized)) {
+                pem = Files.readString(normalized, StandardCharsets.UTF_8);
+                break;
+            }
+        }
+
+        if (pem == null) {
+            Resource resource = null;
+            try {
+                if (privateKeyPath.startsWith("classpath:") || privateKeyPath.startsWith("file:")) {
+                    resource = resourceLoader.getResource(privateKeyPath);
+                }
+            } catch (IllegalArgumentException ex) {
+                log.debug("Ignoring invalid resource path for private key: {}", privateKeyPath);
+            }
+
+            if (resource == null || !resource.exists()) {
+                resource = resourceLoader.getResource("classpath:keys/private_key.pem");
+            }
+            if (resource == null || !resource.exists()) {
+                resource = resourceLoader.getResource("file:license_generation_module/keys/private_key.pem");
+            }
+            if (resource == null || !resource.exists()) {
+                resource = resourceLoader.getResource("file:ADAVIS_PLATFORM_BACKEND/license_generation_module/keys/private_key.pem");
+            }
+            if (resource == null || !resource.exists()) {
+                throw new IOException("Private key file not found. Checked path: " + privateKeyPath);
+            }
+            pem = new String(resource.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        }
+
+        String normalized = pem
+                .replace("-----BEGIN PRIVATE KEY-----", "")
+                .replace("-----END PRIVATE KEY-----", "")
+                .replace("-----BEGIN RSA PRIVATE KEY-----", "")
+                .replace("-----END RSA PRIVATE KEY-----", "")
+                .replaceAll("\\s", "");
+
+        byte[] keyBytes = Base64.getDecoder().decode(normalized);
+        PKCS8EncodedKeySpec spec = new PKCS8EncodedKeySpec(keyBytes);
+        KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+        return (RSAPrivateKey) keyFactory.generatePrivate(spec);
+    }
+
     private RSAPublicKey loadPublicKey() throws IOException, GeneralSecurityException {
         String pem = null;
 
         List<Path> candidates = List.of(
                 Path.of(publicKeyPath),
+                Path.of("backend/license_generation_module/keys/public_key.pem"),
+                Path.of("backend/license_generation_module/keys_txt/public_key.txt"),
                 Path.of("license_generation_module/keys/public_key.pem"),
+                Path.of("license_generation_module/keys_txt/public_key.txt"),
+                Path.of("ADAVIS_PLATFORM_BACKEND/license_generation_module/keys/public_key.pem"),
+                Path.of("ADAVIS_PLATFORM_BACKEND/license_generation_module/keys_txt/public_key.txt"),
                 Path.of("../license_generation_module/keys/public_key.pem"),
-                Path.of("../../license_generation_module/keys/public_key.pem")
+                Path.of("../license_generation_module/keys_txt/public_key.txt"),
+                Path.of("../../license_generation_module/keys/public_key.pem"),
+                Path.of("../../license_generation_module/keys_txt/public_key.txt")
         );
 
         for (Path candidate : candidates) {
@@ -660,9 +931,15 @@ public class LicenseService {
             }
 
             if (resource == null || !resource.exists()) {
+                resource = resourceLoader.getResource("classpath:keys/public_key.pem");
+            }
+            if (resource == null || !resource.exists()) {
                 resource = resourceLoader.getResource("file:license_generation_module/keys/public_key.pem");
             }
-            if (!resource.exists()) {
+            if (resource == null || !resource.exists()) {
+                resource = resourceLoader.getResource("file:ADAVIS_PLATFORM_BACKEND/license_generation_module/keys/public_key.pem");
+            }
+            if (resource == null || !resource.exists()) {
                 throw new IOException("Public key file not found. Checked path: " + publicKeyPath);
             }
             pem = new String(resource.getInputStream().readAllBytes(), StandardCharsets.UTF_8);

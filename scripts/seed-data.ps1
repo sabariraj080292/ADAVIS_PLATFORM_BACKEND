@@ -1,215 +1,116 @@
-[CmdletBinding()]
-param(
-    [switch]$NoReset
-)
+# ============================================
+# Adavis Platform - Full Database Seeding (PowerShell)
+# ============================================
 
-Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-. (Join-Path $PSScriptRoot "common.ps1")
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$RepoRoot = Split-Path -Parent $ScriptDir
 
-Write-Section "Database Seed"
-Assert-Command -Name "docker"
+$ContainerMongoUri = "mongodb://admin:Admin123!@localhost:27017/adavis_platform?authSource=admin"
+$HostMongoUri = if ($env:MONGO_URI) { $env:MONGO_URI } else { "mongodb://admin:Admin123!@localhost:37017/adavis_platform?authSource=admin" }
+$DbName = if ($env:DB_NAME) { $env:DB_NAME } else { "adavis_platform" }
 
-if (-not (Test-DockerRunning)) {
-    throw "Docker is not running. Start Docker Desktop first."
-}
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host " Adavis Platform - Full Database Seeding" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
 
-$initScript = Join-Path (Get-RepoRoot) "docker\init-mongo.js"
-if (-not (Test-Path $initScript)) {
-    throw "Mongo seed script not found: $initScript"
-}
+$ContainerName = "adavis-mongodb"
 
-$iiotSeedScript = Join-Path (Get-RepoRoot) "docker\seed_data_iiot_file.js"
-$realtimeExportScript = Join-Path (Get-RepoRoot) "scripts\export-realtime-sheets.ps1"
-$realtimeJsonDir = Join-Path (Get-RepoRoot) "realtime_sample_data\json"
+# 1. Ensure Mongo container is ready
+Write-Host "Checking MongoDB connection inside container ($ContainerName)..." -ForegroundColor Yellow
+$attempts = 0
+$connected = $false
 
-function Test-ContainerExists {
-    param([Parameter(Mandatory)][string]$Name)
-
-    $match = (& docker ps -a --filter "name=^${Name}$" --format "{{.Names}}" 2>$null)
-    return ($LASTEXITCODE -eq 0 -and ($match -contains $Name))
-}
-
-function Get-ContainerRuntimeStatus {
-    param([Parameter(Mandatory)][string]$Name)
-
-    $status = (& docker inspect -f "{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}" $Name 2>$null)
-    if ($LASTEXITCODE -ne 0) {
-        return "missing"
-    }
-
-    return ("$status".Trim())
-}
-
-function Ensure-MongoContainerReady {
-    if (-not (Test-ContainerExists -Name "adavis-mongodb")) {
-        Write-Step "Mongo container not found; creating and starting mongodb via docker compose"
-        Invoke-DockerCompose -Arguments @("up", "-d", "mongodb")
-    }
-
-    $status = Get-ContainerRuntimeStatus -Name "adavis-mongodb"
-    if ($status -notmatch "running|healthy") {
-        Write-Step "Starting mongodb container"
-        Invoke-DockerCompose -Arguments @("up", "-d", "mongodb")
-    }
-
-    $deadline = (Get-Date).AddSeconds(120)
-    do {
-        $status = Get-ContainerRuntimeStatus -Name "adavis-mongodb"
-        if ($status -match "running|healthy") {
-            return
+while ($attempts -lt 15) {
+    try {
+        $res = docker exec -i $ContainerName mongosh -u admin -p Admin123! --authenticationDatabase admin --quiet --eval "db.runCommand({ ping: 1 })" 2>$null
+        if ($res -match "ok.*1") {
+            $connected = $true
+            break
         }
-        Start-Sleep -Seconds 3
-    } while ((Get-Date) -lt $deadline)
-
-    throw "Container adavis-mongodb did not become ready in time (last status: $status)."
+    } catch { }
+    Write-Host "Waiting for MongoDB container ($ContainerName)..."
+    Start-Sleep -Seconds 2
+    $attempts++
 }
 
-Ensure-MongoContainerReady
-
-function Wait-MongoReady {
-    param(
-        [Parameter(Mandatory)][string[]]$Uris,
-        [int]$TimeoutSeconds = 90
-    )
-
-    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    do {
-        foreach ($uri in $Uris) {
-            $previousNativePreference = $null
-            $hasNativePreference = $false
-            if (Get-Variable -Name PSNativeCommandUseErrorActionPreference -Scope Global -ErrorAction SilentlyContinue) {
-                $hasNativePreference = $true
-                $previousNativePreference = $Global:PSNativeCommandUseErrorActionPreference
-                $Global:PSNativeCommandUseErrorActionPreference = $false
-            }
-
-            try {
-                try {
-                    & docker exec adavis-mongodb mongosh $uri --quiet --eval "db.runCommand({ ping: 1 })" *> $null
-                    if ($LASTEXITCODE -eq 0) {
-                        return
-                    }
-                } catch {
-                    # Ignore transient connect/auth failures while probing readiness and continue retries.
-                }
-            } finally {
-                if ($hasNativePreference) {
-                    $Global:PSNativeCommandUseErrorActionPreference = $previousNativePreference
-                }
-            }
-        }
-
-        Start-Sleep -Seconds 2
-    } while ((Get-Date) -lt $deadline)
-
-    throw "MongoDB is not accepting connections yet (timed out after $TimeoutSeconds seconds)."
+if (-not $connected) {
+    Write-Host "Error: Timed out waiting for MongoDB container '$ContainerName'." -ForegroundColor Red
+    exit 1
 }
 
-# Try common auth layouts because local environments may have been initialized in different ways.
-$mongoUris = @(
-    "mongodb://admin:Admin123!@localhost:27017/adavis_platform?authSource=admin",
-    "mongodb://admin:Admin123!@localhost:27017/adavis_platform?authSource=adavis_platform",
-    "mongodb://localhost:27017/adavis_platform"
-)
+# 2. Reset and apply init-mongo.js
+Write-Host "Applying base platform initialization and schemas (init-mongo.js)..." -ForegroundColor Yellow
+Get-Content "$RepoRoot\docker\init-mongo.js" -Raw | docker exec -i $ContainerName mongosh -u admin -p Admin123! --authenticationDatabase admin --quiet
 
-function Invoke-MongoCommand {
-    param(
-        [Parameter(Mandatory)][string[]]$Uris,
-        [Parameter(Mandatory)][string[]]$Arguments,
-        [switch]$Silent
-    )
-
-    $lastError = $null
-    foreach ($uri in $Uris) {
-        $previousNativePreference = $null
-        $hasNativePreference = $false
-        if (Get-Variable -Name PSNativeCommandUseErrorActionPreference -Scope Global -ErrorAction SilentlyContinue) {
-            $hasNativePreference = $true
-            $previousNativePreference = $Global:PSNativeCommandUseErrorActionPreference
-            $Global:PSNativeCommandUseErrorActionPreference = $false
-        }
-
-        try {
-            try {
-                $output = & docker exec adavis-mongodb mongosh $uri --quiet @Arguments 2>&1
-            } catch {
-                $output = @($_.Exception.Message)
-            }
-        } finally {
-            if ($hasNativePreference) {
-                $Global:PSNativeCommandUseErrorActionPreference = $previousNativePreference
-            }
-        }
-
-        if ($LASTEXITCODE -eq 0) {
-            if (-not $Silent -and $null -ne $output -and "$output".Length -gt 0) {
-                $output
-            }
-            return $true
-        }
-
-        $lastError = $output
-    }
-
-    if ($null -ne $lastError -and "$lastError".Length -gt 0) {
-        Write-Error ("Mongo command failed. Last error: " + ($lastError -join [Environment]::NewLine))
-    }
-
-    return $false
+# 3. Apply IIOT master seed (seed_data_iiot_file.js)
+if (Test-Path "$RepoRoot\docker\seed_data_iiot_file.js") {
+    Write-Host "Applying IIOT master definitions seed..." -ForegroundColor Yellow
+    Get-Content "$RepoRoot\docker\seed_data_iiot_file.js" -Raw | docker exec -i $ContainerName mongosh -u admin -p Admin123! --authenticationDatabase admin --quiet
 }
 
-Wait-MongoReady -Uris $mongoUris
+# 4. Run mock data ingestion to seed batches, alarms, audits, and time-series records
+if ((Test-Path "$RepoRoot\data_service_layer\mock_data_service.py") -and (Test-Path "$RepoRoot\scheduler\run_scheduler_loop.py")) {
+    Write-Host "Seeding batch, alarm, audit, and time-series records via mock ingestion..." -ForegroundColor Yellow
+    
+    $pythonBin = "python"
 
-if (-not $NoReset) {
-    Write-Step "Dropping existing adavis_platform database"
-    if (-not (Invoke-MongoCommand -Uris $mongoUris -Arguments @("--eval", "db.dropDatabase()"))) {
-        throw "Mongo database reset failed."
-    }
-}
+    # Start mock service process
+    New-Item -ItemType Directory -Force -Path "$ScriptDir\logs" | Out-Null
+    $mockOutLog = "$ScriptDir\logs\mock_data_service.log"
+    $mockErrLog = "$ScriptDir\logs\mock_data_service.err.log"
+    $ingestLog = "$ScriptDir\logs\ingestion.log"
 
-Write-Step "Applying seed script to MongoDB"
-if (-not (Invoke-MongoCommand -Uris $mongoUris -Arguments @("/docker-entrypoint-initdb.d/init-mongo.js") -Silent)) {
-    throw "Mongo seed operation failed."
-}
+    $env:PYTHONPATH = $RepoRoot
+    $env:DATA_INGESTION_START_DATE = "2026-08-29 20:00:00"
+    $mockProcess = Start-Process -FilePath $pythonBin -ArgumentList "-m data_service_layer.mock_data_service" -PassThru -RedirectStandardOutput $mockOutLog -RedirectStandardError $mockErrLog -NoNewWindow
+    Start-Sleep -Seconds 2
 
-if (Test-Path $realtimeExportScript) {
-    Write-Step "Exporting realtime Excel sheets to JSON"
-    & $realtimeExportScript
-    if ($LASTEXITCODE -ne 0) {
-        throw "Failed to export realtime sheets."
-    }
-}
-
-if (Test-Path $iiotSeedScript) {
-    Write-Step "Applying IIOT sample seed script to MongoDB"
-    $containerIiotSeedScript = "/tmp/seed_data_iiot_file.js"
-    & docker cp $iiotSeedScript "adavis-mongodb:$containerIiotSeedScript"
-    if ($LASTEXITCODE -ne 0) {
-        throw "Failed to copy IIOT seed script into adavis-mongodb container."
-    }
-
-    if (Test-Path $realtimeJsonDir) {
-        Write-Step "Copying realtime JSON payloads into MongoDB container"
-        & docker exec adavis-mongodb sh -c "rm -rf /tmp/realtime_sample_data_json && mkdir -p /tmp/realtime_sample_data_json"
-        & docker cp "$realtimeJsonDir/." "adavis-mongodb:/tmp/realtime_sample_data_json/"
-        if ($LASTEXITCODE -ne 0) {
-            throw "Failed to copy realtime JSON payloads into adavis-mongodb container."
+    try {
+        Write-Host "  - Running unified ingestion for all equipment categories (G5RMG, G5FBD, G5OGB, G5COAT)..." -ForegroundColor Gray
+        & $pythonBin -m scheduler.run_scheduler_loop --mongo-uri "$HostMongoUri" --db-name "$DbName" --dataset-ids G5RMG G5FBD G5OGB G5COAT --once *>> $ingestLog
+    } finally {
+        if ($mockProcess -and -not $mockProcess.HasExited) {
+            Stop-Process -Id $mockProcess.Id -Force -ErrorAction SilentlyContinue
         }
     }
-
-    if (-not (Invoke-MongoCommand -Uris $mongoUris -Arguments @($containerIiotSeedScript) -Silent)) {
-        throw "IIOT seed operation failed."
-    }
-}
-else {
-    Write-Step "IIOT seed script not found, skipping: $iiotSeedScript"
 }
 
-Write-Step "Verifying seeded collections"
-if (-not (Invoke-MongoCommand -Uris $mongoUris -Arguments @("--eval", "db.getCollectionNames().sort().forEach(function(name){ print(name); })"))) {
-    throw "Mongo seed verification failed."
-}
+# 5. Display collection summary
+Write-Host "Verifying database collection counts..." -ForegroundColor Yellow
+docker exec -i $ContainerName mongosh -u admin -p Admin123! --authenticationDatabase admin --quiet --eval @"
+  const collections = [
+    'mdm_tenants',
+    'mdm_plants',
+    'auth_users',
+    'mdm_user_profiles',
+    'mdm_roles',
+    'iiot_equipment_master',
+    'iiot_equipment_critical_parameters',
+    'iiot_equipment_critical_parameters_limit',
+    'iiot_product_master',
+    'iiot_batch_summary',
+    'iiot_ingestion_checkpoint',
+    'iiot_ingestion_job_run',
+    'iiot_ts_batch_G5RMG',
+    'iiot_ts_batch_G5FBD',
+    'iiot_ts_batch_G5OGB',
+    'iiot_ts_batch_G5COAT',
+    'iiot_ts_alarm_G5RMG',
+    'iiot_ts_alarm_G5FBD',
+    'iiot_ts_alarm_G5OGB',
+    'iiot_ts_alarm_G5COAT',
+    'iiot_ts_audit_G5RMG',
+    'iiot_ts_audit_G5FBD',
+    'iiot_ts_audit_G5OGB',
+    'iiot_ts_audit_G5COAT'
+  ];
+  collections.forEach(col => {
+    print('  - ' + col.padEnd(42) + ': ' + db.getCollection(col).countDocuments({}));
+  });
+"@
 
-Write-Step "Database seed completed successfully."
+Write-Host "============================================" -ForegroundColor Green
+Write-Host "Database seeding completed successfully!" -ForegroundColor Green
+Write-Host "============================================" -ForegroundColor Green

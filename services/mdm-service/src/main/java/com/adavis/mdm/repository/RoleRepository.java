@@ -14,6 +14,12 @@ public interface RoleRepository extends MongoRepository<Role, String> {
 
     List<Role> findByIsActiveTrue();
 
+    List<Role> findByTenantIdAndIsActiveTrue(String tenantId);
+
+    long countByIsActiveTrue();
+
+    long countByTenantIdAndIsActiveTrue(String tenantId);
+
     List<Role> findByParentRoleId(String parentRoleId);
 
     boolean existsByRoleId(String roleId);
@@ -21,6 +27,10 @@ public interface RoleRepository extends MongoRepository<Role, String> {
     boolean existsByTenantIdAndRoleCode(String tenantId, String roleCode);
 
     boolean existsByTenantIdAndRoleCodeAndRoleIdNot(String tenantId, String roleCode, String roleId);
+
+    List<Role> findByTenantId(String tenantId);
+
+    List<Role> findByTenantIdAndIsActive(String tenantId, Boolean isActive);
 
     List<Role> findByIsActive(Boolean isActive);
 }

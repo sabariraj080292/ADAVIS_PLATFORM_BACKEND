@@ -38,7 +38,7 @@ logging:
 
 jwt:
   secret: ${JWT_SECRET:local-dev-jwt-secret-key-256-bits-minimum!}
-  expiration: 3600000
+  expiration: 7200000
   refresh-expiration: 86400000
 
 account:
@@ -47,7 +47,8 @@ account:
     duration-minutes: 30
 
 session:
-  timeout-minutes: 30
+  timeout-minutes: 120
+  idle-threshold-minutes: 120
 
 password:
   policy:
@@ -59,6 +60,10 @@ password:
     history-count: ${PASSWORD_POLICY_HISTORY_COUNT:5}
 
 services:
+  mdm:
+    base-url: ${MDM_SERVICE_BASE_URL:http://localhost:9083}
+  license:
+    base-url: ${LICENSE_SERVICE_BASE_URL:http://localhost:8082}
   audit:
     base-url: ${AUDIT_SERVICE_BASE_URL:http://localhost:8084}
 

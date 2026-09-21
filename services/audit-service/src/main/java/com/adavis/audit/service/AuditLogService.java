@@ -55,23 +55,27 @@ public class AuditLogService {
         String ipAddress = firstNonBlank(event.getIpAddress(), asString(metadata.remove("ipAddress")));
         String sessionId = firstNonBlank(event.getSessionId(), asString(metadata.remove("sessionId")));
         String userAgent = firstNonBlank(event.getUserAgent(), asString(metadata.remove("userAgent")));
+        String username = firstNonBlank(event.getUsername(), asString(metadata.remove("username")));
+        if (username == null || username.isBlank()) {
+            username = event.getUserId();
+        }
 
         metadata = sanitizeMetadata(event.getEntity(), metadata);
 
         AuditLog auditLog = AuditLog.builder()
                 .id(UUID.randomUUID().toString())
                 .userId(event.getUserId())
-            .username(null)
+                .username(username)
                 .action(event.getAction())
                 .entity(event.getEntity())
                 .entityId(event.getEntityId())
                 .before(event.getBefore())
                 .after(event.getAfter())
-            .metadata(metadata.isEmpty() ? null : metadata)
-            .ipAddress(ipAddress)
-            .sessionId(sessionId)
-            .userAgent(userAgent)
-            .tenantId(tenantId)
+                .metadata(metadata.isEmpty() ? null : metadata)
+                .ipAddress(ipAddress)
+                .sessionId(sessionId)
+                .userAgent(userAgent)
+                .tenantId(tenantId)
                 .status(event.getStatus() != null ? event.getStatus() : "SUCCESS")
                 .failureReason(event.getFailureReason())
                 .timestamp(event.getTimestamp() != null ? event.getTimestamp() : Instant.now())
@@ -94,11 +98,36 @@ public class AuditLogService {
         return auditLogRepository.findByUserIdOrderByTimestampDesc(userId, pageable);
     }
 
+    public Page<AuditLog> getAuditTrailsForUserOrEntity(String tenantId, String userId, Pageable pageable) {
+        if (tenantId != null && !tenantId.isBlank()) {
+            return auditLogRepository.findByTenantIdAndUserIdOrEntityIdOrderByTimestampDesc(tenantId.trim(), userId.trim(), pageable);
+        }
+        return auditLogRepository.findByUserIdOrEntityIdOrderByTimestampDesc(userId.trim(), pageable);
+    }
+
     public Page<AuditLog> getAuditTrails(String userId, Pageable pageable) {
-        if (userId != null && !userId.isBlank()) {
-            return auditLogRepository.findByUserIdOrderByTimestampDesc(userId, pageable);
+        return getAuditTrails(null, userId, pageable);
+    }
+
+    public Page<AuditLog> getAuditTrails(String tenantId, String userId, Pageable pageable) {
+        boolean hasTenant = tenantId != null && !tenantId.isBlank();
+        boolean hasUser = userId != null && !userId.isBlank();
+
+        if (hasTenant && hasUser) {
+            return auditLogRepository.findByTenantIdAndUserIdOrderByTimestampDesc(tenantId.trim(), userId.trim(), pageable);
+        } else if (hasTenant) {
+            return auditLogRepository.findByTenantIdOrderByTimestampDesc(tenantId.trim(), pageable);
+        } else if (hasUser) {
+            return auditLogRepository.findByUserIdOrderByTimestampDesc(userId.trim(), pageable);
         }
         return auditLogRepository.findAll(pageable);
+    }
+
+    public Page<AuditLog> getAuditTrailsByTenant(String tenantId, String userId, Pageable pageable) {
+        if (tenantId == null || tenantId.isBlank()) {
+            throw new BusinessException("tenantId is required", "VALIDATION_ERROR");
+        }
+        return getAuditTrails(tenantId, userId, pageable);
     }
 
     public Page<AuditLog> getAuditLogsByAction(String action, Instant from, Instant to, Pageable pageable) {
@@ -115,6 +144,11 @@ public class AuditLogService {
 
     @Transactional(readOnly = true)
     public UserActivityTrendResponse getUserActivityTrend(String mode, Integer month, Integer quarter, Integer year) {
+        return getUserActivityTrend(mode, month, quarter, year, null);
+    }
+
+    @Transactional(readOnly = true)
+    public UserActivityTrendResponse getUserActivityTrend(String mode, Integer month, Integer quarter, Integer year, String tenantId) {
         if (mode == null || mode.isBlank()) {
             throw new BusinessException("mode is required", "VALIDATION_ERROR");
         }
@@ -152,8 +186,9 @@ public class AuditLogService {
         Instant rangeStart = periodStart.atStartOfDay(ZoneOffset.UTC).toInstant();
         Instant rangeEndExclusive = periodEnd.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
 
-        List<AuditLog> loginEvents = auditLogRepository
-                .findByActionAndStatusAndTimestampRangeOrderByTimestampAsc("LOGIN", "SUCCESS", rangeStart, rangeEndExclusive);
+        List<AuditLog> loginEvents = (tenantId != null && !tenantId.isBlank())
+                ? auditLogRepository.findByActionAndStatusAndTenantIdAndTimestampRangeOrderByTimestampAsc("LOGIN", "SUCCESS", tenantId, rangeStart, rangeEndExclusive)
+                : auditLogRepository.findByActionAndStatusAndTimestampRangeOrderByTimestampAsc("LOGIN", "SUCCESS", rangeStart, rangeEndExclusive);
 
         List<WeeklyBucketAccumulator> buckets = buildWeeklyBuckets(periodStart, periodEnd);
         for (AuditLog loginEvent : loginEvents) {
@@ -172,7 +207,7 @@ public class AuditLogService {
                 continue;
             }
 
-            buckets.get(bucketIndex).addUser(loginEvent.getUserId(), loginEvent.getUsername());
+            buckets.get(bucketIndex).addLogin(loginEvent.getUserId(), loginEvent.getUsername());
         }
 
         return UserActivityTrendResponse.builder()
@@ -294,13 +329,15 @@ public class AuditLogService {
         private final LocalDate weekStart;
         private final LocalDate weekEnd;
         private final Map<String, UserActivityTrendResponse.UserSummary> users = new LinkedHashMap<>();
+        private long loginCount = 0;
 
         private WeeklyBucketAccumulator(LocalDate weekStart, LocalDate weekEnd) {
             this.weekStart = weekStart;
             this.weekEnd = weekEnd;
         }
 
-        private void addUser(String userId, String username) {
+        private void addLogin(String userId, String username) {
+            loginCount++;
             if (userId == null || userId.isBlank()) {
                 return;
             }
@@ -324,6 +361,7 @@ public class AuditLogService {
                     .weekStart(weekStart.toString())
                     .weekEnd(weekEnd.toString())
                     .distinctUserCount(users.size())
+                    .loginCount(loginCount)
                     .users(new ArrayList<>(users.values()))
                     .build();
         }

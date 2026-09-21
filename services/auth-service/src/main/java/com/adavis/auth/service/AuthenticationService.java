@@ -12,9 +12,12 @@ import com.adavis.common.exception.UnauthorizedException;
 import com.adavis.dto.auth.response.AuthResponse;
 import com.adavis.dto.auth.response.CurrentUserResponse;
 import com.adavis.dto.auth.response.LoginInitiateResponse;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import com.adavis.dto.auth.response.SessionResponse;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -35,11 +38,11 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-@Slf4j
 @Service
-@RequiredArgsConstructor
 @Transactional
 public class AuthenticationService {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AuthenticationService.class);
 
     private final UserRepository userRepository;
     private final CredentialRepository credentialRepository;
@@ -50,6 +53,29 @@ public class AuthenticationService {
     private final PasswordPolicyService passwordPolicyService;
     private final AuditEventPublisher auditEventPublisher;
     private final RedisTemplate<String, String> redisTemplate;
+    private final MongoTemplate mongoTemplate;
+
+    public AuthenticationService(UserRepository userRepository,
+                                 CredentialRepository credentialRepository,
+                                 SessionRepository sessionRepository,
+                                 PasswordEncoder passwordEncoder,
+                                 JwtService jwtService,
+                                 SessionService sessionService,
+                                 PasswordPolicyService passwordPolicyService,
+                                 AuditEventPublisher auditEventPublisher,
+                                 @Qualifier("redisTemplate") RedisTemplate<String, String> redisTemplate,
+                                 MongoTemplate mongoTemplate) {
+        this.userRepository = userRepository;
+        this.credentialRepository = credentialRepository;
+        this.sessionRepository = sessionRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.jwtService = jwtService;
+        this.sessionService = sessionService;
+        this.passwordPolicyService = passwordPolicyService;
+        this.auditEventPublisher = auditEventPublisher;
+        this.redisTemplate = redisTemplate;
+        this.mongoTemplate = mongoTemplate;
+    }
 
     private static final String BLACKLIST_PREFIX = "blacklist:";
     private static final String SUPER_ADMIN_USER_ID = "SUPER_ADMIN";
@@ -266,6 +292,10 @@ public class AuthenticationService {
     }
 
     public void provisionUserWithInitialPassword(String userId, String username, String email, String initialPassword) {
+        provisionUserWithInitialPassword(userId, username, email, initialPassword, null);
+    }
+
+    public void provisionUserWithInitialPassword(String userId, String username, String email, String initialPassword, String actorUserId) {
         if (initialPassword == null || initialPassword.isBlank()) {
             throw new BusinessException("Initial password is required", "INITIAL_PASSWORD_REQUIRED");
         }
@@ -280,11 +310,16 @@ public class AuthenticationService {
         credential.setUpdatedAt(Instant.now());
         credentialRepository.save(credential);
 
-        auditEventPublisher.publish(userId, username, "USER_PROVISION", "AUTH_USER", userId,
+        String actor = (actorUserId != null && !actorUserId.isBlank()) ? actorUserId : userId;
+        auditEventPublisher.publish(actor, username, "USER_PROVISION", "AUTH_USER", userId,
                 "SUCCESS", null, Map.of("mode", "INITIAL_PASSWORD"));
     }
 
     public void updateUserStatus(String userId, String status, Boolean isLocked) {
+        updateUserStatus(userId, status, isLocked, null);
+    }
+
+    public void updateUserStatus(String userId, String status, Boolean isLocked, String actorUserId) {
         if (userId == null || userId.isBlank()) {
             throw new BusinessException("User ID is required", "USER_ID_REQUIRED");
         }
@@ -316,7 +351,8 @@ public class AuthenticationService {
         user.setUpdatedAt(Instant.now());
         userRepository.save(user);
 
-        auditEventPublisher.publish(userId, user.getUsername(), "USER_STATUS_UPDATED", "AUTH_USER", userId,
+        String actor = (actorUserId != null && !actorUserId.isBlank()) ? actorUserId : userId;
+        auditEventPublisher.publish(actor, user.getUsername(), "USER_STATUS_UPDATED", "AUTH_USER", userId,
                 "SUCCESS", null, Map.of(
                         "status", normalizedStatus,
                         "isLocked", String.valueOf(Boolean.TRUE.equals(user.getIsLocked()))));
@@ -361,15 +397,23 @@ public class AuthenticationService {
     private User findUserByIdentifier(String identifier) {
         String normalizedIdentifier = identifier == null ? null : identifier.trim();
         return userRepository.findByUserId(normalizedIdentifier)
+            .or(() -> userRepository.findByUsername(normalizedIdentifier))
             .or(() -> userRepository.findByEmail(normalizedIdentifier))
-                .orElseThrow(() -> new UnauthorizedException("User not found"));
+            .or(() -> userRepository.findByUserIdIgnoreCase(normalizedIdentifier))
+            .or(() -> userRepository.findByUsernameIgnoreCase(normalizedIdentifier))
+            .or(() -> userRepository.findByEmailIgnoreCase(normalizedIdentifier))
+            .orElseThrow(() -> new UnauthorizedException("User not found"));
     }
 
     private User findUserByIdentifierForInitiate(String identifier) {
         String normalizedIdentifier = identifier == null ? null : identifier.trim();
         return userRepository.findByUserId(normalizedIdentifier)
-                .or(() -> userRepository.findByEmail(normalizedIdentifier))
-                .orElseThrow(() -> new ResourceNotFoundException("User", normalizedIdentifier));
+            .or(() -> userRepository.findByUsername(normalizedIdentifier))
+            .or(() -> userRepository.findByEmail(normalizedIdentifier))
+            .or(() -> userRepository.findByUserIdIgnoreCase(normalizedIdentifier))
+            .or(() -> userRepository.findByUsernameIgnoreCase(normalizedIdentifier))
+            .or(() -> userRepository.findByEmailIgnoreCase(normalizedIdentifier))
+            .orElseThrow(() -> new ResourceNotFoundException("User", normalizedIdentifier));
     }
 
     private User upsertActiveUser(String userId, String username, String email) {
@@ -416,7 +460,45 @@ public class AuthenticationService {
         }
     }
 
-    private boolean isTokenBlacklisted(String token) {
+    public SessionResponse heartbeat(String token, String ipAddress, String deviceInfo) {
+        String bearerToken = token;
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            bearerToken = bearerToken.substring(7);
+        }
+
+        if (bearerToken == null || bearerToken.isBlank()) {
+            throw new UnauthorizedException("Authorization token is required");
+        }
+
+        if (!jwtService.validateToken(bearerToken)) {
+            throw new UnauthorizedException("Invalid access token");
+        }
+
+        if (isTokenBlacklisted(bearerToken)) {
+            throw new UnauthorizedException("Token has been revoked");
+        }
+
+        Date expiry = jwtService.getExpirationDate(bearerToken);
+        if (expiry != null && expiry.before(new Date())) {
+            throw new UnauthorizedException("Token has expired");
+        }
+
+        String userId = jwtService.extractUserId(bearerToken);
+        String sessionId = jwtService.extractSessionId(bearerToken);
+
+        if (userId == null || userId.isBlank()) {
+            throw new UnauthorizedException("User identity missing from token");
+        }
+
+        User user = userRepository.findByUserId(userId)
+                .orElseThrow(() -> new UnauthorizedException("User not found"));
+        validateUserCanLogin(user);
+
+        Session session = sessionService.heartbeatSession(sessionId, userId, ipAddress, deviceInfo);
+        return sessionService.toResponse(session);
+    }
+
+    public boolean isTokenBlacklisted(String token) {
         return Boolean.TRUE.equals(redisTemplate.hasKey(BLACKLIST_PREFIX + token));
     }
 
@@ -474,6 +556,27 @@ public class AuthenticationService {
             return StringUtils.hasText(tenantValue) ? tenantValue : null;
         } catch (RestClientException ex) {
             log.warn("Tenant resolution lookup failed for userId {}: {}", userId, ex.getMessage());
+            return resolveTenantIdFromLocalProfile(userId);
+        }
+    }
+
+    private String resolveTenantIdFromLocalProfile(String userId) {
+        try {
+            Query query = Query.query(Criteria.where("userId").is(userId));
+            org.bson.Document profile = mongoTemplate.findOne(query, org.bson.Document.class, "mdm_user_profiles");
+            if (profile == null) {
+                return null;
+            }
+
+            Object tenantId = profile.get("tenantId");
+            String tenantValue = tenantId == null ? null : String.valueOf(tenantId).trim();
+            if (StringUtils.hasText(tenantValue)) {
+                log.info("Resolved tenant context from local profile for userId={}", userId);
+                return tenantValue;
+            }
+            return null;
+        } catch (Exception ex) {
+            log.warn("Local tenant resolution lookup failed for userId {}: {}", userId, ex.getMessage());
             return null;
         }
     }
